@@ -1,0 +1,35 @@
+# Node modules
+node_modules/
+npm-debug.log
+yarn.lock
+package-lock.json
+
+# Expo / React Native
+.expo/
+.expo-shared/
+*.expo
+
+# iOS / Android builds
+ios/
+android/
+*.apk
+*.aab
+*.ipa
+
+# Base de datos local
+backend/grietas.db
+
+# Uploads temporales
+backend/uploads/*
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
