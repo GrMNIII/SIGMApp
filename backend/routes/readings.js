@@ -28,4 +28,31 @@ router.post('/', (req, res) => {
   }
 });
 
+// PUT /readings/:id
+router.put('/:id', (req, res) => {
+  const { id } = req.params;
+  const reading = req.body;
+  const columns = Object.keys(reading).map((key) => `${key} = ?`).join(', ');
+  try {
+    const stmt = db.prepare(`UPDATE readings SET ${columns} WHERE id = ?`);
+    stmt.run(...Object.values(reading), id);
+    const updatedReading = db.prepare('SELECT * FROM readings WHERE id = ?').get(id);
+    res.status(200).json(updatedReading);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /reagins/:id
+router.delete('/:id', (req, res) => {
+  const { id } = req.params;
+  try {
+    const stmt = db.prepare('DELETE FROM readings WHERE id = ?');
+    stmt.run(id);
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

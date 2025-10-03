@@ -25,4 +25,29 @@ router.post('/', (req, res) => {
   }
 });
 
+// PUT /projects/id
+router.put('/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description } = req.body;
+    const stmt = db.prepare('UPDATE projects SET name = ?, description = ? WHERE id = ?');
+    stmt.run(name, description, id);
+    res.sendStatus(204);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /projects/id
+router.delete('/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const stmt = db.prepare('DELETE FROM projects WHERE id = ?');
+    stmt.run(id);
+    res.sendStatus(204);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
