@@ -27,7 +27,7 @@ router.get('/:id', (req, res) => {
 
 // POST /cracks
 router.post('/', (req, res) => {
-  const crack = req.body; // Aquí recibes todo el objeto crack
+  const crack = req.body;
   const columns = Object.keys(crack).join(', ');
   const placeholders = Object.keys(crack).map(() => '?').join(', ');
   try {
@@ -35,6 +35,33 @@ router.post('/', (req, res) => {
     stmt.run(...Object.values(crack));
     const newCrack = db.prepare('SELECT * FROM cracks WHERE id = ?').get(crack.id);
     res.status(201).json(newCrack);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /cracks/:id
+router.put('/:id', (req, res) => {
+  const { id } = req.params;
+  const crack = req.body;
+  const columns = Object.keys(crack).map((key) => `${key} = ?`).join(', ');
+  try {
+    const stmt = db.prepare(`UPDATE cracks SET ${columns} WHERE id = ?`);
+    stmt.run(...Object.values(crack), id);
+    const updatedCrack = db.prepare('SELECT * FROM cracks WHERE id = ?').get(id);
+    res.status(200).json(updatedCrack);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /cracks/:id
+router.delete('/:id', (req, res) => {
+  const { id } = req.params;
+  try {
+    const stmt = db.prepare('DELETE FROM cracks WHERE id = ?');
+    stmt.run(id);
+    res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
