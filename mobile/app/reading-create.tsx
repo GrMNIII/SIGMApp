@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, ScrollView, Alert } from 'react-native';
-import { api } from '../api/client';
+import { api } from '../src/api/client';
 import UIInput from '@/components/UIInput';
 import UIButton from '@/components/UIButton';
 

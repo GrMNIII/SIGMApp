@@ -1,0 +1,10 @@
+.expo/
+.vscode/
+
+../backend/
+
+android/
+ios/
+
+.log
+npm-debug.

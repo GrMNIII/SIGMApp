@@ -1,14 +1,28 @@
-import { Stack } from "expo-router";
+import { Tabs } from "expo-router";
+// Asumiendo que tienes un archivo 'app/(tabs)/explore.tsx'
 
-export default function Layout() {
+export default function TabLayout() {
   return (
-    <Stack>
-      <Stack.Screen name="index" options={{ title: "Proyectos" }} />
-      <Stack.Screen name="project-create" options={{ title: "Nuevo Proyecto" }} />
-      <Stack.Screen name="project-main" options={{ title: "Detalle Proyecto" }} />
-      <Stack.Screen name="crack-create" options={{ title: "Nueva Grieta" }} />
-      <Stack.Screen name="crack-details" options={{ title: "Detalle Grieta" }} />
-      <Stack.Screen name="reading-create" options={{ title: "Nueva Lectura" }} />
-    </Stack>
+    <Tabs>
+      {/* 1. Pantalla principal del tab (proyectos) */}
+      <Tabs.Screen 
+        name="index" // Corresponde a app/(tabs)/index.tsx
+        options={{ 
+            title: "Proyectos", 
+            // Aquí puedes añadir icono para la pestaña
+        }} 
+      />
+      
+      {/* 2. Pantalla de explorar (si existe) */}
+      <Tabs.Screen 
+        name="explore" // Corresponde a app/(tabs)/explore.tsx
+        options={{ 
+            title: "Explorar", 
+            // Aquí puedes añadir icono para la pestaña
+        }} 
+      />
+      
+      {/* ¡NO incluyas aquí project-create, project-main, etc. ! */}
+    </Tabs>
   );
 }

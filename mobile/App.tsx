@@ -2,13 +2,12 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-// Importar screens
-import ProjectList from './src/screens/ProjectList';
-import ProjectCreate from './src/screens/ProjectCreate';
-import ProjectMain from './src/screens/ProjectMain';
-import CrackCreate from './src/screens/CrackCreate';
-import CrackDetails from './src/screens/CrackDetails';
-import ReadingCreate from './src/screens/ReadingCreate';
+import ProjectList from './app/project-list';
+import ProjectCreate from './app/project-create';
+import ProjectMain from './app/project-main';
+import CrackCreate from './app/crack-create';
+import CrackDetails from './app/crack-details';
+import ReadingCreate from './app/reading-create';
 
 export type RootStackParamList = {
   ProjectList: undefined;
