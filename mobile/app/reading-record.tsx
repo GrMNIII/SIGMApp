@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, Alert, ActivityIndicator, FlatList, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Alert, ActivityIndicator, FlatList, } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import UIButton from '@/components/UIButton';
 import { api } from '@/src/api/client';
 
-const { width } = Dimensions.get('window');
 
 // --- TIPOS DE DATOS ---
 
