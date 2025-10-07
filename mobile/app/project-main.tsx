@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Alert, ActivityIndicator, Platform } from 'react-native'; // <-- Importamos Platform
-import { useLocalSearchParams, useRouter, useRootNavigationState } from 'expo-router'; // <-- Importado useRootNavigationState
+import { View, Text, StyleSheet, Alert, ActivityIndicator, Platform } from 'react-native';
+import { useLocalSearchParams, useRouter, useRootNavigationState } from 'expo-router';
 import { CameraView, BarcodeScanningResult, useCameraPermissions } from 'expo-camera';
-// import { api } from '../src/api/client'; // <-- Importación 'api' eliminada
 import UIButton from '@/components/UIButton';
+import { api } from '@/src/api/client';
 
 // Componente utilitario para manejar la CameraView y los permisos.
 const CameraViewComponent = ({ onBarcodeScanned, isNative }: { onBarcodeScanned: (event: BarcodeScanningResult) => void, isNative: boolean }) => {
     const [permission, requestPermission] = useCameraPermissions();
     
-    // Si no es nativo (sólo Web), devolvemos un mensaje seguro
-    // NOTA: Para pruebas en Expo Go en iOS/Android físico, isNative se fuerza a TRUE en ProjectMain.
+    // ... Lógica de comprobación de permisos y fallback ...
+    
     if (!isNative) { 
         return (
             <View style={styles.scannerFallback}>
@@ -22,101 +22,155 @@ const CameraViewComponent = ({ onBarcodeScanned, isNative }: { onBarcodeScanned:
     }
 
     if (!permission) {
-        // La cámara aún no ha cargado los permisos
         return <View style={styles.loadingContainer}><ActivityIndicator size="large" color="#007bff" /></View>;
     }
 
     if (!permission.granted) {
-        // Permisos denegados
         return (
             <View style={styles.scannerFallback}>
                 <Text style={styles.scannerText}>
                     Se requieren permisos de cámara para escanear QR.
                 </Text>
-                <UIButton title="Solicitar Permiso" onPress={requestPermission} />
+                <UIButton 
+                    title="Solicitar Permiso" 
+                    onPress={async () => { await requestPermission(); }} 
+                />
             </View>
         );
     }
 
-    // CameraView requiere los tipos de código de barras para el escaneo
     return (
         <CameraView
             style={styles.camera}
             facing="back"
             onBarcodeScanned={onBarcodeScanned}
-            barcodeScannerSettings={{ barcodeTypes: ['qr'] }} // Corregido a string literal 'qr'
+            barcodeScannerSettings={{ barcodeTypes: ['qr'] }} 
         />
     );
 };
 
+// Interfaz para la estructura del proyecto.
 type Project = {
     id: number;
     name: string;
     description: string;
 };
 
+// Interfaz para los parámetros esperados de la URL (query parameters)
+interface ProjectMainParams {
+    projectId: string; // Se lee del parámetro de consulta
+    project?: string; 
+}
+
 export default function ProjectMain() {
     const router = useRouter();
-    const navigationState = useRootNavigationState(); // <-- Hook para obtener el estado de navegación
-    const params = useLocalSearchParams();
+    const navigationState = useRootNavigationState();
     
-    // Obtenemos el objeto project de los parámetros
-    const project: Project | null = params.project ? JSON.parse(params.project as string) : null;
-    
-    // Estado para controlar que solo escaneemos un código por vista
+    // Leemos los parámetros de consulta (query parameters)
+    const params = useLocalSearchParams() as unknown as ProjectMainParams;
+    const projectId = params.projectId;
+
+    const [project, setProject] = useState<Project | null>(null);
+    const [loading, setLoading] = useState(true);
     const [scanned, setScanned] = useState(false);
-    
-    // Detectar si estamos en un entorno nativo (no web)
     const [isNative, setIsNative] = useState(false);
     
+    const fetchProjectDetails = useCallback(async (id: string) => {
+        setLoading(true);
+        try {
+            const response = await api.get(`/projects/${id}`);
+            setProject(response.data); 
+        } catch (error) {
+            console.error("Error al cargar detalles del proyecto:", error);
+            Alert.alert("Error de Carga", "No se pudo obtener el proyecto. Verifique el servidor o el ID.");
+            router.replace('/project-list' as any); 
+        } finally {
+            setLoading(false);
+        }
+    }, [router]);
+
     useEffect(() => {
-        // SOLUCIÓN TEMPORAL PARA PROBAR EN EXPO GO:
-        // Si estamos en un entorno móvil (iOS o Android), forzamos isNative a true.
         if (Platform.OS === 'ios' || Platform.OS === 'android') {
             setIsNative(true);
         }
         
-        // Si el proyecto es nulo (navegación incorrecta), volver
-        if (!project) {
-            Alert.alert("Error de Proyecto", "No se encontró la información del proyecto.");
-            router.replace('/'); 
+        if (projectId) {
+            // Si el objeto project viene serializado, lo usamos 
+            if (params.project) {
+                setProject(JSON.parse(params.project));
+                setLoading(false);
+            } else {
+                // Si solo tenemos el ID (ej: recarga), cargamos de la API
+                fetchProjectDetails(projectId);
+            }
+        } else {
+            // Error si no se proporcionó el ID
+            Alert.alert("Error de Proyecto", "Falta el ID del proyecto.");
+            router.replace('/project-list' as any); 
         }
-    }, [project, router]);
+    }, [projectId, params.project, router, fetchProjectDetails]);
 
-    // Función que se dispara al escanear un código de barras
+    /**
+     * Función que se dispara al escanear un código de barras.
+     * 1. Verifica si la grieta ya existe.
+     * 2. Redirige a 'reading-create' (si existe) o a 'crack-create' (si no existe).
+     */
     const handleBarCodeScanned = useCallback(async ({ data }: BarcodeScanningResult) => {
-        if (!scanned) {
-            setScanned(true); // Bloquear futuros escaneos inmediatamente
+        if (!scanned && project) {
+            setScanned(true); 
             
-            // 1. Validar datos del QR. Asumimos que 'data' es el ID del crack.
             const crackId = data.trim();
             if (!crackId) {
                 Alert.alert("Error QR", "El código QR escaneado no contenía datos válidos.");
-                setScanned(false); // Reabrir el escáner
+                setScanned(false);
                 return;
             }
 
-            // 2. Navegación Segura: Usamos navigationState?.key para garantizar que el stack esté montado.
-            // Si el navigationState tiene una key, el router está listo.
-            if (navigationState?.key) {
-                router.push({
-                    pathname: '/crack-create',
-                    params: { 
-                        // Corregido: Pasar el ID del proyecto y el ID del crack
-                        projectId: project?.id.toString() || '', 
-                        crackId: crackId
-                    },
-                });
-            } else {
-                // Si el router no está listo, emitimos una advertencia y reestablecemos el escáner.
+            if (!navigationState?.key) {
                 console.warn("Router no está listo para navegar después del escaneo. Reintentando...");
                 setScanned(false);
+                return;
             }
-        }
-    }, [scanned, router, project, navigationState]); // <-- Agregada dependencia navigationState
 
-    if (!project) {
-        return <View style={styles.loadingContainer}><Text>Cargando...</Text></View>;
+            const navParams = { 
+                projectId: project.id.toString(), 
+                crackId: crackId
+            };
+
+            let destinationPath = '/crack-create' as any; // Destino por defecto: crear grieta
+            
+            try {
+                // 1. Intentar obtener la grieta
+                await api.get(`/cracks/${crackId}`);
+                
+                // 2. Si tiene éxito (código 200), la grieta existe: redirigir a crear LECTURA
+                Alert.alert("Grieta Encontrada", `La grieta ${crackId} ya existe. Registrando nueva lectura.`);
+                destinationPath = '/reading-create' as any; 
+                
+            } catch (error: any) {
+                // Si el error es 404 (Not Found), la grieta NO existe: mantener destino a crear GRIETA
+                if (error.response && error.response.status === 404) {
+                    Alert.alert("Nueva Grieta", `El ID ${crackId} no existe. Creando nueva grieta.`);
+                    // destinationPath ya es '/crack-create', no se necesita cambiar
+                } else {
+                    // Manejar otros errores de red o servidor
+                    console.error("Error al verificar la grieta:", error);
+                    Alert.alert("Error de Verificación", "Hubo un problema de conexión al verificar la grieta. Intente de nuevo.");
+                    setScanned(false); // Permitir reintento de escaneo
+                    return;
+                }
+            }
+
+            // Redirigir al destino final
+            router.push({
+                pathname: destinationPath, 
+                params: navParams,
+            });
+        }
+    }, [scanned, router, project, navigationState]);
+
+    if (loading || !project) {
+        return <View style={styles.loadingContainer}><ActivityIndicator size="large" color="#191970" /></View>;
     }
 
     return (
@@ -134,7 +188,10 @@ export default function ProjectMain() {
             <View style={styles.buttonContainer}>
                 <UIButton 
                     title="Ver Cracks Existentes" 
-                    onPress={() => router.push({ pathname: '/crack-details', params: { projectId: project.id.toString() }})} 
+                    onPress={() => router.push({
+                        pathname: '/crack-list' as any, 
+                        params: { projectId: project.id.toString() }
+                    })} 
                 />
             </View>
         </View>

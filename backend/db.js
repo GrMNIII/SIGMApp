@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS projects (
     description TEXT
 );
 CREATE TABLE IF NOT EXISTS cracks (
-    id TEXT PRIMARY KEY, -- id proveniente del QR, string único
+    id TEXT PRIMARY KEY,
     project_id INTEGER NOT NULL,
     name TEXT NOT NULL,
     edificio_area TEXT,

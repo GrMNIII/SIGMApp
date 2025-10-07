@@ -1,48 +1,425 @@
-import React, { useState } from 'react';
-import { View, ScrollView, Alert } from 'react-native';
-import { api } from '../src/api/client';
-import UIInput from '@/components/UIInput';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, Alert, ScrollView, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import UIButton from '@/components/UIButton';
+import { api } from '@/src/api/client';
 
-type ReadingCreateProps = {
-  navigation: any;
-  route: { params: { crackId: string; project: any } };
+interface ReadingData {
+    crack_id: string; // TEXT NOT NULL
+    fecha: string | null;
+    hora: string | null;
+    nombre_inspector: string | null;
+    lectura_x: number | null;
+    lectura_y: number | null;
+    ambiente_temperatura_C: number | null;
+    ambiente_hr_percent: number | null;
+    ambiente_clima: string | null;
+    // Usamos number para INTEGER, típicamente 0 (No) o 1 (Sí)
+    operacion_equipo_en_servicio: number | null; 
+    operacion_vibraciones: number | null;       
+    integridad: string | null;
+    observaciones: string | null;
+}
+
+// Interfaz para definir la estructura de los parámetros esperados de la URL
+interface ReadingCreateParams {
+    crackId: string;   // ID de la grieta a la que pertenece la lectura
+    projectId: string; // ID del proyecto (para navegación)
+}
+
+// Estado inicial del formulario (todos los campos nulos)
+const initialReadingState: Omit<ReadingData, 'crack_id'> = {
+    fecha: '',
+    hora: '',
+    nombre_inspector: '',
+    lectura_x: null,
+    lectura_y: null,
+    ambiente_temperatura_C: null,
+    ambiente_hr_percent: null,
+    ambiente_clima: null,
+    operacion_equipo_en_servicio: 0, // Por defecto en 0
+    operacion_vibraciones: 0,        // Por defecto en 0
+    integridad: null,
+    observaciones: null,
 };
 
-export default function ReadingCreate({ navigation, route }: ReadingCreateProps) {
-  const { crackId } = route.params;
-  const [fecha, setFecha] = useState('');
-  const [hora, setHora] = useState('');
-  const [nombre_inspector, setNombreInspector] = useState('');
-  const [lecturaX, setLecturaX] = useState('');
-  const [lecturaY, setLecturaY] = useState('');
 
-  const saveReading = async () => {
-    if (!fecha || !hora || !nombre_inspector) return Alert.alert('Validación', 'Completa los campos obligatorios');
-    try {
-      await api.post('/readings', {
-        crack_id: crackId,
-        fecha,
-        hora,
-        nombre_inspector,
-        lectura_x: parseFloat(lecturaX),
-        lectura_y: parseFloat(lecturaY),
-      });
-      Alert.alert('Éxito', 'Lectura guardada');
-      navigation.goBack();
-    } catch {
-      Alert.alert('Error', 'No se pudo guardar la lectura');
-    }
-  };
-
-  return (
-    <ScrollView style={{ flex:1, padding:16 }}>
-      <UIInput label="Fecha" value={fecha} onChangeText={setFecha} placeholder="YYYY-MM-DD" />
-      <UIInput label="Hora" value={hora} onChangeText={setHora} placeholder="HH:MM" />
-      <UIInput label="Nombre Inspector" value={nombre_inspector} onChangeText={setNombreInspector} placeholder="Nombre inspector" />
-      <UIInput label="Lectura X" value={lecturaX} onChangeText={setLecturaX} placeholder="X" keyboardType="numeric" />
-      <UIInput label="Lectura Y" value={lecturaY} onChangeText={setLecturaY} placeholder="Y" keyboardType="numeric" />
-      <UIButton title="Guardar lectura" onPress={saveReading} />
-    </ScrollView>
-  );
+// Componente auxiliar para manejar la entrada de texto/número (similar al de crack-create)
+interface FormInputProps {
+    label: string;
+    value: string | number | null;
+    onChange: (text: string) => void;
+    keyboardType?: 'default' | 'numeric' | 'email-address' | 'phone-pad';
+    required?: boolean;
+    // FIX: Se agregó 'placeholder' a la interfaz
+    placeholder?: string; 
 }
+
+const FormInput = ({ label, value, onChange, keyboardType = 'default', required = false, placeholder }: FormInputProps) => (
+    <View style={formStyles.inputGroup}>
+        <Text style={formStyles.label}>{label}{required && <Text style={{ color: 'red' }}>*</Text>}</Text>
+        <TextInput
+            style={formStyles.input}
+            value={typeof value === 'number' ? value.toString() : (value || '')}
+            onChangeText={onChange}
+            keyboardType={keyboardType}
+            // FIX: Se usa el placeholder provisto o se genera uno por defecto
+            placeholder={placeholder || `Ingresar ${label.toLowerCase()}`}
+        />
+    </View>
+);
+
+export default function ReadingCreate() {
+    const router = useRouter();
+    
+    // 1. Migración a Expo Router y obtención de parámetros
+    const params = useLocalSearchParams() as unknown as ReadingCreateParams;
+    const crackId = params.crackId;
+    const projectId = params.projectId;
+
+    const [loading, setLoading] = useState(true);
+    const [crackExists, setCrackExists] = useState(false); // Bandera para controlar si se muestra el formulario
+    const [readingData, setReadingData] = useState<Omit<ReadingData, 'crack_id'>>({ ...initialReadingState });
+    const [error, setError] = useState('');
+
+
+    // Función genérica para manejar cambios en el formulario
+    const handleInputChange = (key: keyof typeof initialReadingState, text: string) => {
+        setReadingData(prev => {
+            
+            const isNumeric = [
+                'lectura_x', 'lectura_y', 'ambiente_temperatura_C', 'ambiente_hr_percent', 
+                'operacion_equipo_en_servicio', 'operacion_vibraciones'
+            ].includes(key as string);
+            
+            let newValue: string | number | null = text.trim() === '' ? null : text;
+            
+            if (isNumeric && newValue !== null) {
+                const num = parseFloat(newValue);
+                // Si es un campo entero (como los flags de operación), usa parseInt
+                if (key === 'operacion_equipo_en_servicio' || key === 'operacion_vibraciones') {
+                    newValue = parseInt(newValue.toString());
+                    if (isNaN(newValue)) newValue = 0; // Fallback seguro
+                } else {
+                    newValue = isNaN(num) ? text : num;
+                }
+            }
+            
+            return { ...prev, [key]: newValue };
+        });
+    };
+
+    // Función para verificar la existencia del crack
+    const checkCrackExistence = useCallback(async (cId: string) => {
+        setLoading(true);
+        setError('');
+        try {
+            await api.get(`/cracks/${cId}`);
+            setCrackExists(true); // Crack existe, muestra el formulario
+        } catch (err: any) {
+            if (err.response && err.response.status === 404) {
+                setError(`Error: No se encontró la grieta con ID "${cId}". No se puede registrar la lectura.`);
+                Alert.alert(
+                    "Error de Integridad",
+                    `La grieta con ID "${cId}" no existe. No se puede crear una lectura.`,
+                    [{ text: "Volver", onPress: () => router.back() }]
+                );
+            } else {
+                console.error("Error al verificar existencia de crack:", err);
+                setError('Error de conexión al verificar la grieta.');
+            }
+        } finally {
+            setLoading(false);
+        }
+    }, [router]);
+
+    useEffect(() => {
+        if (!projectId || !crackId) {
+            Alert.alert(
+                "Error de Navegación", 
+                "Faltan los IDs de proyecto o grieta.",
+                [{ text: "Volver", onPress: () => router.replace('/project-list') }]
+            );
+            return;
+        }
+        checkCrackExistence(crackId);
+    }, [projectId, crackId, checkCrackExistence, router]);
+
+
+    // Función principal para guardar la nueva lectura
+    const handleSaveReading = async () => {
+        // Validación mínima
+        if (!readingData.fecha || !readingData.hora || !readingData.nombre_inspector || !readingData.lectura_x || !readingData.lectura_y) {
+            Alert.alert("Validación", "Debes completar la Fecha, Hora, Inspector y las Lecturas X/Y.");
+            return;
+        }
+
+        setLoading(true);
+        
+        // Creamos el payload final incluyendo el crack_id y limpiando nulos
+        const readingPayload: ReadingData = {
+            crack_id: crackId,
+            ...readingData,
+        } as ReadingData;
+
+        // Limpieza de nulos/vacíos para un payload más limpio
+        const cleanedPayload: Record<string, any> = {};
+        for (const key in readingPayload) {
+            const value = readingPayload[key as keyof ReadingData];
+            if (value !== null && value !== undefined && value !== '') {
+                cleanedPayload[key] = value;
+            }
+        }
+
+        try {
+            // Enviamos los datos al endpoint POST /readings
+            await api.post('/readings', cleanedPayload);
+            
+            Alert.alert("Éxito", `Lectura registrada para la grieta ${crackId}.`);
+            
+            // Volvemos a la pantalla de detalles de la grieta para ver la nueva lectura
+            router.replace({
+                pathname: '/crack-details',
+                params: { projectId: projectId, crackId: crackId }
+            });
+
+        } catch (err) {
+            console.error("Error al crear lectura:", err);
+            Alert.alert("Error de Creación", "Hubo un problema al guardar la lectura en el servidor.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // --- RENDERIZADO DE ESTADOS ---
+
+    if (loading) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#007bff" />
+                <Text style={styles.header}>Verificando grieta y cargando formulario...</Text>
+            </View>
+        );
+    }
+    
+    if (error && !crackExists) {
+         return (
+             <View style={styles.loadingContainer}>
+                 <Text style={styles.errorText}>{error}</Text>
+                 <UIButton title="Regresar" onPress={() => router.back()} style={{ marginTop: 20 }} />
+             </View>
+         );
+    }
+
+    if (!crackExists) {
+        // Esto debería ser manejado por el if(error) anterior, pero es un fallback.
+        return (
+            <View style={styles.loadingContainer}>
+                <Text style={styles.errorText}>No se pudo confirmar la existencia de la grieta.</Text>
+            </View>
+        );
+    }
+    
+    // --- RENDERIZADO PRINCIPAL (Formulario) ---
+
+    return (
+        <KeyboardAvoidingView 
+            style={{ flex: 1 }} 
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+            <ScrollView style={styles.container}>
+                <Text style={styles.header}>Nueva Lectura para Grieta</Text>
+                
+                {/* IDs Clave */}
+                <View style={formStyles.keyInfoCard}>
+                    <Text style={formStyles.label}>Grieta ID:</Text>
+                    <Text style={formStyles.value}>{crackId}</Text>
+                    <Text style={formStyles.label}>Proyecto ID:</Text>
+                    <Text style={formStyles.value}>{projectId}</Text>
+                </View>
+
+                {/* SECCIÓN 1: IDENTIFICACIÓN (OBLIGATORIO) */}
+                <View style={formStyles.sectionHeaderContainer}>
+                    <Text style={formStyles.sectionHeader}>1. Identificación y Tiempo</Text>
+                </View>
+                <FormInput 
+                    label="Fecha" 
+                    value={readingData.fecha} 
+                    onChange={(text) => handleInputChange('fecha', text)} 
+                    placeholder="YYYY-MM-DD" 
+                    required 
+                />
+                <FormInput 
+                    label="Hora" 
+                    value={readingData.hora} 
+                    onChange={(text) => handleInputChange('hora', text)} 
+                    placeholder="HH:MM" 
+                    required 
+                />
+                <FormInput 
+                    label="Nombre Inspector" 
+                    value={readingData.nombre_inspector} 
+                    onChange={(text) => handleInputChange('nombre_inspector', text)} 
+                    required 
+                />
+
+                {/* SECCIÓN 2: LECTURAS (OBLIGATORIO) */}
+                <View style={formStyles.sectionHeaderContainer}>
+                    <Text style={formStyles.sectionHeader}>2. Mediciones (mm)</Text>
+                </View>
+                <FormInput 
+                    label="Lectura Eje X" 
+                    value={readingData.lectura_x} 
+                    onChange={(text) => handleInputChange('lectura_x', text)} 
+                    keyboardType="numeric" 
+                    required 
+                />
+                <FormInput 
+                    label="Lectura Eje Y" 
+                    value={readingData.lectura_y} 
+                    onChange={(text) => handleInputChange('lectura_y', text)} 
+                    keyboardType="numeric" 
+                    required 
+                />
+
+                {/* SECCIÓN 3: AMBIENTE */}
+                <View style={formStyles.sectionHeaderContainer}>
+                    <Text style={formStyles.sectionHeader}>3. Condiciones Ambientales</Text>
+                </View>
+                <FormInput 
+                    label="Temperatura ($^{\circ}C$)" 
+                    value={readingData.ambiente_temperatura_C} 
+                    onChange={(text) => handleInputChange('ambiente_temperatura_C', text)} 
+                    keyboardType="numeric" 
+                />
+                <FormInput 
+                    label="Humedad Relativa (%)" 
+                    value={readingData.ambiente_hr_percent} 
+                    onChange={(text) => handleInputChange('ambiente_hr_percent', text)} 
+                    keyboardType="numeric" 
+                />
+                <FormInput 
+                    label="Clima" 
+                    value={readingData.ambiente_clima} 
+                    onChange={(text) => handleInputChange('ambiente_clima', text)} 
+                    placeholder="Soleado, Lluvioso, etc."
+                />
+
+                {/* SECCIÓN 4: OPERACIÓN E INTEGRIDAD */}
+                <View style={formStyles.sectionHeaderContainer}>
+                    <Text style={formStyles.sectionHeader}>4. Entorno y Estado</Text>
+                </View>
+                
+                {/* Campos de tipo INTEGER/Flag (Sugerencia: cambiar a Switch/Checkbox en producción) */}
+                <FormInput 
+                    label="Equipo en Servicio (1=Sí / 0=No)" 
+                    value={readingData.operacion_equipo_en_servicio} 
+                    onChange={(text) => handleInputChange('operacion_equipo_en_servicio', text)} 
+                    keyboardType="numeric" 
+                />
+                <FormInput 
+                    label="Vibraciones Presentes (1=Sí / 0=No)" 
+                    value={readingData.operacion_vibraciones} 
+                    onChange={(text) => handleInputChange('operacion_vibraciones', text)} 
+                    keyboardType="numeric" 
+                />
+                <FormInput 
+                    label="Integridad del Sensor" 
+                    value={readingData.integridad} 
+                    onChange={(text) => handleInputChange('integridad', text)} 
+                    placeholder="OK, Dañado, Obstruido"
+                />
+                <FormInput 
+                    label="Observaciones" 
+                    value={readingData.observaciones} 
+                    onChange={(text) => handleInputChange('observaciones', text)} 
+                    placeholder="Notas adicionales..."
+                />
+
+                
+                <View style={{ marginTop: 30, marginBottom: 50 }}>
+                    <UIButton 
+                        title={loading ? "Guardando..." : "Guardar Lectura"} 
+                        onPress={handleSaveReading} 
+                    />
+                </View>
+
+            </ScrollView>
+        </KeyboardAvoidingView>
+    );
+}
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        padding: 20,
+        backgroundColor: '#f8f9fa',
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#f8f9fa',
+    },
+    header: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        marginBottom: 20,
+        color: '#007bff',
+        textAlign: 'center',
+    },
+    errorText: {
+        fontSize: 18,
+        color: 'red',
+        textAlign: 'center',
+        marginTop: 50,
+    }
+});
+
+// Estilos específicos del formulario (copiados de crack-create.tsx para consistencia)
+const formStyles = StyleSheet.create({
+    keyInfoCard: {
+        backgroundColor: '#e6f0ff',
+        padding: 15,
+        borderRadius: 8,
+        marginBottom: 20,
+        borderLeftWidth: 5,
+        borderLeftColor: '#007bff',
+    },
+    sectionHeaderContainer: {
+        borderBottomWidth: 1,
+        borderBottomColor: '#ced4da',
+        paddingBottom: 5,
+        marginBottom: 15,
+        marginTop: 20,
+    },
+    sectionHeader: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#495057',
+    },
+    inputGroup: {
+        marginBottom: 15,
+    },
+    label: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#555',
+        marginBottom: 5,
+    },
+    value: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginTop: 0,
+        marginBottom: 10,
+        color: '#333',
+    },
+    input: {
+        borderWidth: 1,
+        borderColor: '#ccc',
+        backgroundColor: '#fff',
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 16,
+    },
+});
