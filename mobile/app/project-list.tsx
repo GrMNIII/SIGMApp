@@ -6,10 +6,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { api } from "../src/api/client";
+// import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 import UIButton from "@/components/UIButton";
+import { api, BASE_URL } from "@/src/api/client";
 
 // Tipado para el Project con ID como number
 type Project = {
@@ -21,24 +25,79 @@ type Project = {
 export default function ProjectList() {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true); // Funcion para obtener los proyectos
+  const [loading, setLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false); // Estado para la exportación
 
+  // Función de carga de proyectos
   const fetchProjects = async () => {
     setLoading(true);
     try {
       const res = await api.get("/projects");
       setProjects(res.data);
     } catch (error: any) {
-      console.log("Error al cargar proyectos:", error);
+      console.error("Error al cargar proyectos:", error);
+      // Mostrar un mensaje de error más claro al usuario
+      Alert.alert(
+        "Error de Conexión",
+        "No se pudieron cargar los proyectos. Revisa tu conexión de red o la URL del backend."
+      );
     } finally {
       setLoading(false);
     }
-  }; // Cargamos los proyectos al montar el componente
+  };
 
+  // --- LÓGICA DE EXPORTACIÓN A CSV ---
+  const handleExportPress = async () => {
+    if (isExporting) return;
+
+    setIsExporting(true);
+    
+    const exportUrl = `${BASE_URL}/projects/export`;
+    const fileName = `proyectos_${new Date().toISOString().split('T')[0]}.csv`;
+    
+    const fileUri = FileSystem.cacheDirectory + fileName;
+
+    console.log(`Iniciando descarga de: ${exportUrl}`);
+
+    try {
+        const downloadResponse = await FileSystem.downloadAsync(
+            exportUrl,
+            fileUri
+        );
+
+        if (downloadResponse.status !== 200) {
+            Alert.alert("Error de Exportación", `El servidor devolvió un error: ${downloadResponse.status}`);
+            return;
+        }
+
+        console.log(`Archivo descargado en: ${downloadResponse.uri}`);
+        
+        const isAvailable = await Sharing.isAvailableAsync();
+        if (!isAvailable) {
+            Alert.alert("Error", "La función de compartir no está disponible en este dispositivo.");
+            return;
+        }
+
+        await Sharing.shareAsync(downloadResponse.uri, {
+            mimeType: 'text/csv',
+            dialogTitle: 'Exportar Proyectos CSV',
+        });
+        
+    } catch (error: any) {
+        console.error("Error completo en la exportación:", error);
+        Alert.alert("Exportación Fallida", "No se pudo generar ni descargar el archivo CSV.");
+    } finally {
+        setIsExporting(false);
+    }
+};
+  // -------------------------------------
+
+  // Cargamos los proyectos al montar el componente
   useEffect(() => {
     fetchProjects();
-  }, []); // Función para navegar a la pantalla principal de un proyecto
+  }, []);
 
+  // Función para navegar a la pantalla principal de un proyecto
   const handleProjectPress = (p: Project) => {
     // CORRECCIÓN CLAVE: Usamos la ruta estática /project-main y pasamos el ID como parámetro
     router.push({
@@ -48,8 +107,9 @@ export default function ProjectList() {
         project: JSON.stringify(p), // Objeto pre-cargado (optimización)
       },
     });
-  }; // Función para navegar a la pantalla de creación
+  };
 
+  // Función para navegar a la pantalla de creación
   const handleCreatePress = () => {
     router.push("/project-create");
   };
@@ -64,9 +124,7 @@ export default function ProjectList() {
 
   return (
     <View style={styles.container}>
-      
       <ScrollView style={styles.listContainer}>
-        
         {projects.map((p) => (
           <TouchableOpacity
             key={p.id}
@@ -86,8 +144,22 @@ export default function ProjectList() {
         )}
       </ScrollView>
       <View style={styles.buttonContainer}>
-        
-        <UIButton title="Registrar proyecto" onPress={handleCreatePress} />
+        {/* Botón para Exportar Proyectos */}
+        <UIButton
+          title={isExporting ? "Exportando..." : "Exportar Proyectos a CSV"}
+          onPress={handleExportPress}
+          disabled={isExporting} // Deshabilitar durante la exportación
+          // Estilo secundario para diferenciar
+          style={{
+            backgroundColor: isExporting ? "#ffc107" : "#28a745",
+            marginBottom: 10,
+          }}
+        />
+
+        <UIButton
+          title="Registrar nuevo proyecto"
+          onPress={handleCreatePress}
+        />
       </View>
     </View>
   );
