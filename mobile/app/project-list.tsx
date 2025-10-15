@@ -51,45 +51,53 @@ export default function ProjectList() {
     if (isExporting) return;
 
     setIsExporting(true);
-    
+
     const exportUrl = `${BASE_URL}/projects/export`;
-    const fileName = `proyectos_${new Date().toISOString().split('T')[0]}.csv`;
-    
+    const fileName = `proyectos_${new Date().toISOString().split("T")[0]}.csv`;
+
     const fileUri = FileSystem.cacheDirectory + fileName;
 
     console.log(`Iniciando descarga de: ${exportUrl}`);
 
     try {
-        const downloadResponse = await FileSystem.downloadAsync(
-            exportUrl,
-            fileUri
+      const downloadResponse = await FileSystem.downloadAsync(
+        exportUrl,
+        fileUri
+      );
+
+      if (downloadResponse.status !== 200) {
+        Alert.alert(
+          "Error de Exportación",
+          `El servidor devolvió un error: ${downloadResponse.status}`
         );
+        return;
+      }
 
-        if (downloadResponse.status !== 200) {
-            Alert.alert("Error de Exportación", `El servidor devolvió un error: ${downloadResponse.status}`);
-            return;
-        }
+      console.log(`Archivo descargado en: ${downloadResponse.uri}`);
 
-        console.log(`Archivo descargado en: ${downloadResponse.uri}`);
-        
-        const isAvailable = await Sharing.isAvailableAsync();
-        if (!isAvailable) {
-            Alert.alert("Error", "La función de compartir no está disponible en este dispositivo.");
-            return;
-        }
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) {
+        Alert.alert(
+          "Error",
+          "La función de compartir no está disponible en este dispositivo."
+        );
+        return;
+      }
 
-        await Sharing.shareAsync(downloadResponse.uri, {
-            mimeType: 'text/csv',
-            dialogTitle: 'Exportar Proyectos CSV',
-        });
-        
+      await Sharing.shareAsync(downloadResponse.uri, {
+        mimeType: "text/csv",
+        dialogTitle: "Exportar Proyectos CSV",
+      });
     } catch (error: any) {
-        console.error("Error completo en la exportación:", error);
-        Alert.alert("Exportación Fallida", "No se pudo generar ni descargar el archivo CSV.");
+      console.error("Error completo en la exportación:", error);
+      Alert.alert(
+        "Exportación Fallida",
+        "No se pudo generar ni descargar el archivo CSV."
+      );
     } finally {
-        setIsExporting(false);
+      setIsExporting(false);
     }
-};
+  };
   // -------------------------------------
 
   // Cargamos los proyectos al montar el componente
