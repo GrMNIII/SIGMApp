@@ -204,7 +204,7 @@ export default function CrackDetails() {
                 value={`${crackData.umbral_verde_mm_sem || '0'} / ${crackData.umbral_amarillo_mm_scm || '0'} / ${crackData.umbral_rojo_mm_scm || '0'} mm`} 
             />
 
-            <View style={{ marginTop: 20, marginBottom: 40 }}>
+            <View style={{ marginTop: 20, marginBottom: 10 }}>
                 <UIButton 
                     title="Ver historial de registros"
                     onPress={handleReaginRecord}

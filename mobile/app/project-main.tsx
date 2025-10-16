@@ -144,35 +144,6 @@ export default function ProjectMain() {
     });
   };
 
-  // Eliminar proyecto
-  const handleDeleteProject = () => {
-    Alert.alert(
-      "Confirmar Eliminación",
-      `¿Estás seguro de que quieres eliminar el proyecto "${project?.name}"?\n\nEsta acción también eliminará todas las grietas y lecturas asociadas y NO se puede deshacer.`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Eliminar",
-          style: "destructive",
-          onPress: () => {
-            try {
-              projectService.delete(parseInt(projectId));
-              Alert.alert("Éxito", "Proyecto eliminado correctamente", [
-                {
-                  text: "OK",
-                  onPress: () => router.replace("/project-list" as any),
-                },
-              ]);
-            } catch (error) {
-              console.error("Error al eliminar proyecto:", error);
-              Alert.alert("Error", "No se pudo eliminar el proyecto");
-            }
-          },
-        },
-      ]
-    );
-  };
-
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -275,12 +246,6 @@ export default function ProjectMain() {
           title="Ver Todas las Grietas"
           onPress={handleViewCracks}
           style={{ backgroundColor: "#28a745", marginBottom: 10 }}
-        />
-
-        <UIButton
-          title="Eliminar Proyecto"
-          onPress={handleDeleteProject}
-          style={{ backgroundColor: "#dc3545" }}
         />
       </View>
     </View>
