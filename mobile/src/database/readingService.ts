@@ -1,13 +1,5 @@
 import db from "./db";
 
-try { db.runSync(`ALTER TABLE readings ADD COLUMN nombre_inspector TEXT;`); } catch {}
-try { db.runSync(`ALTER TABLE readings ADD COLUMN ambiente_temperatura_C REAL;`); } catch {}
-try { db.runSync(`ALTER TABLE readings ADD COLUMN ambiente_hr_percent REAL;`); } catch {}
-try { db.runSync(`ALTER TABLE readings ADD COLUMN ambiente_clima TEXT;`); } catch {}
-try { db.runSync(`ALTER TABLE readings ADD COLUMN operacion_equipo_en_servicio INTEGER;`); } catch {}
-try { db.runSync(`ALTER TABLE readings ADD COLUMN operacion_vibraciones INTEGER;`); } catch {}
-try { db.runSync(`ALTER TABLE readings ADD COLUMN integridad TEXT;`); } catch {}
-
 export const readingService = {
   // Obtener todos los registros
   getAll: () => {
