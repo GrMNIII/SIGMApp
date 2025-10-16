@@ -13,14 +13,6 @@ export default function TabLayout() {
         }} 
       />
       
-      {/* 2. Pantalla de explorar (si existe) */}
-      <Tabs.Screen 
-        name="explore" // Corresponde a app/(tabs)/explore.tsx
-        options={{ 
-            title: "Explorar", 
-            // Aquí puedes añadir icono para la pestaña
-        }} 
-      />
       
       {/* ¡NO incluyas aquí project-create, project-main, etc. ! */}
     </Tabs>

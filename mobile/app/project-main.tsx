@@ -1,248 +1,474 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Alert, ActivityIndicator, Platform } from 'react-native';
-import { useLocalSearchParams, useRouter, useRootNavigationState } from 'expo-router';
-import { CameraView, BarcodeScanningResult, useCameraPermissions } from 'expo-camera';
-import UIButton from '@/components/UIButton';
-import { api } from '@/src/api/client';
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+} from "react-native";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
+import { Camera } from "expo-camera";
+import UIButton from "@/components/UIButton";
+import { projectService } from "@/src/database/projectService";
+import { crackService } from "@/src/database/crackService";
 
-// Componente utilitario para manejar la CameraView y los permisos.
-const CameraViewComponent = ({ onBarcodeScanned, isNative }: { onBarcodeScanned: (event: BarcodeScanningResult) => void, isNative: boolean }) => {
-    const [permission, requestPermission] = useCameraPermissions();
-    
-    // ... Lógica de comprobación de permisos y fallback ...
-    
-    if (!isNative) { 
-        return (
-            <View style={styles.scannerFallback}>
-                <Text style={styles.scannerText}>
-                    La funcionalidad de escaneo solo está disponible en dispositivos móviles.
-                </Text>
-            </View>
-        );
-    }
-
-    if (!permission) {
-        return <View style={styles.loadingContainer}><ActivityIndicator size="large" color="#007bff" /></View>;
-    }
-
-    if (!permission.granted) {
-        return (
-            <View style={styles.scannerFallback}>
-                <Text style={styles.scannerText}>
-                    Se requieren permisos de cámara para escanear QR.
-                </Text>
-                <UIButton 
-                    title="Solicitar Permiso" 
-                    onPress={async () => { await requestPermission(); }} 
-                />
-            </View>
-        );
-    }
-
-    return (
-        <CameraView
-            style={styles.camera}
-            facing="back"
-            onBarcodeScanned={onBarcodeScanned}
-            barcodeScannerSettings={{ barcodeTypes: ['qr'] }} 
-        />
-    );
-};
-
-// Interfaz para la estructura del proyecto.
 type Project = {
-    id: number;
-    name: string;
-    description: string;
+  id: number;
+  name: string;
+  description?: string;
 };
 
-// Interfaz para los parámetros esperados de la URL (query parameters)
-interface ProjectMainParams {
-    projectId: string; // Se lee del parámetro de consulta
-    project?: string; 
-}
+type Crack = {
+  id: string;
+  project_id: number;
+  name: string;
+  // ... otros campos
+};
 
 export default function ProjectMain() {
-    const router = useRouter();
-    const navigationState = useRootNavigationState();
-    
-    // Leemos los parámetros de consulta (query parameters)
-    const params = useLocalSearchParams() as unknown as ProjectMainParams;
-    const projectId = params.projectId;
+  const params = useLocalSearchParams();
+  const router = useRouter();
 
-    const [project, setProject] = useState<Project | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [scanned, setScanned] = useState(false);
-    const [isNative, setIsNative] = useState(false);
-    
-    const fetchProjectDetails = useCallback(async (id: string) => {
-        setLoading(true);
-        try {
-            const response = await api.get(`/projects/${id}`);
-            setProject(response.data); 
-        } catch (error) {
-            console.error("Error al cargar detalles del proyecto:", error);
-            Alert.alert("Error de Carga", "No se pudo obtener el proyecto. Verifique el servidor o el ID.");
-            router.replace('/project-list' as any); 
-        } finally {
-            setLoading(false);
-        }
-    }, [router]);
+  const projectId = params.projectId as string;
+  const preloadedProject = params.project
+    ? JSON.parse(params.project as string)
+    : null;
 
-    useEffect(() => {
-        if (Platform.OS === 'ios' || Platform.OS === 'android') {
-            setIsNative(true);
-        }
-        
-        if (projectId) {
-            // Si el objeto project viene serializado, lo usamos 
-            if (params.project) {
-                setProject(JSON.parse(params.project));
-                setLoading(false);
-            } else {
-                // Si solo tenemos el ID (ej: recarga), cargamos de la API
-                fetchProjectDetails(projectId);
-            }
-        } else {
-            // Error si no se proporcionó el ID
-            Alert.alert("Error de Proyecto", "Falta el ID del proyecto.");
-            router.replace('/project-list' as any); 
-        }
-    }, [projectId, params.project, router, fetchProjectDetails]);
+  const [project, setProject] = useState<Project | null>(preloadedProject);
+  const [cracks, setCracks] = useState<Crack[]>([]);
+  const [loading, setLoading] = useState(!preloadedProject);
+  const [cracksLoading, setCracksLoading] = useState(true);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
 
-    /**
-     * Función que se dispara al escanear un código de barras.
-     * 1. Verifica si la grieta ya existe.
-     * 2. Redirige a 'reading-create' (si existe) o a 'crack-create' (si no existe).
-     */
-    const handleBarCodeScanned = useCallback(async ({ data }: BarcodeScanningResult) => {
-        if (!scanned && project) {
-            setScanned(true); 
-            
-            const crackId = data.trim();
-            if (!crackId) {
-                Alert.alert("Error QR", "El código QR escaneado no contenía datos válidos.");
-                setScanned(false);
-                return;
-            }
+  // Solicitar permisos de cámara
+  useEffect(() => {
+    (async () => {
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      setHasPermission(status === "granted");
+    })();
+  }, []);
 
-            if (!navigationState?.key) {
-                console.warn("Router no está listo para navegar después del escaneo. Reintentando...");
-                setScanned(false);
-                return;
-            }
-
-            const navParams = { 
-                projectId: project.id.toString(), 
-                crackId: crackId
-            };
-
-            let destinationPath = '/crack-create' as any; // Destino por defecto: crear grieta
-            
-            try {
-                // 1. Intentar obtener la grieta
-                await api.get(`/cracks/${crackId}`);
-                
-                // 2. Si tiene éxito (código 200), la grieta existe: redirigir a crear LECTURA
-                Alert.alert("Grieta Encontrada", `La grieta ${crackId} ya existe. Registrando nueva lectura.`);
-                destinationPath = '/reading-create' as any; 
-                
-            } catch (error: any) {
-                // Si el error es 404 (Not Found), la grieta NO existe: mantener destino a crear GRIETA
-                if (error.response && error.response.status === 404) {
-                    Alert.alert("Nueva Grieta", `El ID ${crackId} no existe. Creando nueva grieta.`);
-                    // destinationPath ya es '/crack-create', no se necesita cambiar
-                } else {
-                    // Manejar otros errores de red o servidor
-                    console.error("Error al verificar la grieta:", error);
-                    Alert.alert("Error de Verificación", "Hubo un problema de conexión al verificar la grieta. Intente de nuevo.");
-                    setScanned(false); // Permitir reintento de escaneo
-                    return;
-                }
-            }
-
-            // Redirigir al destino final
-            router.push({
-                pathname: destinationPath, 
-                params: navParams,
-            });
-        }
-    }, [scanned, router, project, navigationState]);
-
-    if (loading || !project) {
-        return <View style={styles.loadingContainer}><ActivityIndicator size="large" color="#191970" /></View>;
+  // Cargar datos del proyecto
+  const fetchProject = () => {
+    if (preloadedProject) {
+      setProject(preloadedProject);
+      setLoading(false);
+      return;
     }
 
-    return (
-        <View style={styles.container}>
-            <Text style={styles.projectHeader}>Proyecto: {project.name}</Text>
-            <Text style={styles.projectSubHeader}>{project.description}</Text>
-            
-            <View style={styles.scannerContainer}>
-                <CameraViewComponent 
-                    onBarcodeScanned={handleBarCodeScanned}
-                    isNative={isNative}
-                />
-            </View>
-            
-            <View style={styles.buttonContainer}>
-                <UIButton 
-                    title="Ver Grietas Existentes" 
-                    onPress={() => router.push({
-                        pathname: '/crack-list' as any, 
-                        params: { projectId: project.id.toString() }
-                    })} 
-                />
-            </View>
-        </View>
+    setLoading(true);
+    try {
+      const data = projectService.getById(parseInt(projectId));
+      if (data) {
+        setProject(data as Project);
+      } else {
+        Alert.alert("Error", "Proyecto no encontrado", [
+          { text: "OK", onPress: () => router.back() },
+        ]);
+      }
+    } catch (error) {
+      console.error("Error al cargar proyecto:", error);
+      Alert.alert("Error", "No se pudo cargar el proyecto");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Cargar grietas del proyecto
+  const fetchCracks = () => {
+    setCracksLoading(true);
+    try {
+      const data = crackService.getByProject(parseInt(projectId));
+      setCracks(data as Crack[]);
+      console.log(`✅ ${data.length} grietas cargadas para proyecto ${projectId}`);
+    } catch (error) {
+      console.error("Error al cargar grietas:", error);
+      Alert.alert("Error", "No se pudieron cargar las grietas");
+    } finally {
+      setCracksLoading(false);
+    }
+  };
+
+  // Cargar datos al montar y cuando la pantalla recibe foco
+  useEffect(() => {
+    fetchProject();
+  }, [projectId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchCracks();
+    }, [projectId])
+  );
+
+  // Abrir escáner QR para registrar nueva grieta
+  const handleScanQR = () => {
+    if (hasPermission === null) {
+      Alert.alert("Esperando", "Verificando permisos de cámara...");
+      return;
+    }
+
+    if (hasPermission === false) {
+      Alert.alert(
+        "Permiso Denegado",
+        "La aplicación necesita acceso a la cámara para escanear códigos QR. Por favor, habilita los permisos en la configuración de tu dispositivo.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
+    // Navegar al escáner QR
+    router.push({
+      pathname: "/qr-scanner" as any,
+      params: { projectId: projectId },
+    });
+  };
+
+  // Navegar a la lista de grietas
+  const handleViewCracks = () => {
+    router.push({
+      pathname: "/crack-list" as any,
+      params: { projectId: projectId },
+    });
+  };
+
+  // Ver detalles de una grieta específica
+  const handleCrackPress = (crack: Crack) => {
+    router.push({
+      pathname: "/crack-details" as any,
+      params: {
+        projectId: projectId,
+        crackId: crack.id,
+      },
+    });
+  };
+
+  // Eliminar proyecto
+  const handleDeleteProject = () => {
+    Alert.alert(
+      "Confirmar Eliminación",
+      `¿Estás seguro de que quieres eliminar el proyecto "${project?.name}"?\n\nEsta acción también eliminará todas las grietas y lecturas asociadas y NO se puede deshacer.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: () => {
+            try {
+              projectService.delete(parseInt(projectId));
+              Alert.alert("Éxito", "Proyecto eliminado correctamente", [
+                {
+                  text: "OK",
+                  onPress: () => router.replace("/project-list" as any),
+                },
+              ]);
+            } catch (error) {
+              console.error("Error al eliminar proyecto:", error);
+              Alert.alert("Error", "No se pudo eliminar el proyecto");
+            }
+          },
+        },
+      ]
     );
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007bff" />
+        <Text style={styles.loadingText}>Cargando proyecto...</Text>
+      </View>
+    );
+  }
+
+  if (!project) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.errorText}>Proyecto no encontrado</Text>
+        <UIButton title="Volver" onPress={() => router.back()} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <ScrollView style={styles.scrollView}>
+        {/* Información del Proyecto */}
+        <View style={styles.projectCard}>
+          <Text style={styles.projectTitle}>{project.name}</Text>
+
+          {project.description && (
+            <Text style={styles.projectDescription}>{project.description}</Text>
+          )}
+
+          <View style={styles.projectMeta}>
+            <Text style={styles.metaLabel}>ID del Proyecto:</Text>
+            <Text style={styles.metaValue}>{projectId}</Text>
+          </View>
+        </View>
+
+        {/* Resumen de Grietas */}
+        <View style={styles.summaryCard}>
+          <Text style={styles.sectionTitle}>📊 Resumen</Text>
+          {cracksLoading ? (
+            <ActivityIndicator size="small" color="#007bff" />
+          ) : (
+            <View style={styles.summaryContent}>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryNumber}>{cracks.length}</Text>
+                <Text style={styles.summaryLabel}>
+                  {cracks.length === 1 ? "Grieta" : "Grietas"} Registradas
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Grietas Recientes */}
+        {cracks.length > 0 && (
+          <View style={styles.recentCracksCard}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>🔍 Grietas Recientes</Text>
+              <TouchableOpacity onPress={handleViewCracks}>
+                <Text style={styles.viewAllLink}>Ver todas →</Text>
+              </TouchableOpacity>
+            </View>
+
+            {cracks.slice(0, 5).map((crack) => (
+              <TouchableOpacity
+                key={crack.id}
+                style={styles.crackItem}
+                onPress={() => handleCrackPress(crack)}
+              >
+                <View style={styles.crackInfo}>
+                  <Text style={styles.crackName}>{crack.name}</Text>
+                  <Text style={styles.crackId}>ID: {crack.id}</Text>
+                </View>
+                <Text style={styles.crackArrow}>›</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Mensaje si no hay grietas */}
+        {cracks.length === 0 && !cracksLoading && (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyIcon}>📋</Text>
+            <Text style={styles.emptyTitle}>No hay grietas registradas</Text>
+            <Text style={styles.emptyText}>
+              Escanea un código QR para registrar tu primera grieta
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Botones de Acción */}
+      <View style={styles.buttonContainer}>
+        <UIButton
+          title="📷 Escanear QR para Nueva Grieta"
+          onPress={handleScanQR}
+          style={{ backgroundColor: "#007bff", marginBottom: 10 }}
+        />
+
+        <UIButton
+          title="📋 Ver Todas las Grietas"
+          onPress={handleViewCracks}
+          style={{ backgroundColor: "#28a745", marginBottom: 10 }}
+        />
+
+        <UIButton
+          title="🗑️ Eliminar Proyecto"
+          onPress={handleDeleteProject}
+          style={{ backgroundColor: "#dc3545" }}
+        />
+      </View>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        padding: 20,
-        backgroundColor: '#f9f9f9',
-    },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    projectHeader: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        marginBottom: 5,
-        color: '#333',
-    },
-    projectSubHeader: {
-        fontSize: 16,
-        color: '#666',
-        marginBottom: 20,
-    },
-    scannerContainer: {
-        flex: 1,
-        borderRadius: 10,
-        overflow: 'hidden',
-        marginBottom: 20,
-    },
-    camera: {
-        flex: 1,
-    },
-    scannerFallback: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#ddd',
-        padding: 20,
-        borderRadius: 10,
-    },
-    scannerText: {
-        textAlign: 'center',
-        marginBottom: 15,
-        color: '#555',
-    },
-    buttonContainer: {
-        paddingVertical: 10,
-    }
+  container: {
+    flex: 1,
+    backgroundColor: "#f8f9fa",
+  },
+  scrollView: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f8f9fa",
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: "#666",
+  },
+  errorText: {
+    fontSize: 18,
+    color: "#dc3545",
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  projectCard: {
+    backgroundColor: "#fff",
+    margin: 16,
+    padding: 20,
+    borderRadius: 12,
+    borderLeftWidth: 5,
+    borderLeftColor: "#007bff",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  projectTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 12,
+  },
+  projectDescription: {
+    fontSize: 16,
+    color: "#666",
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  projectMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#e9ecef",
+  },
+  metaLabel: {
+    fontSize: 14,
+    color: "#999",
+    marginRight: 8,
+  },
+  metaValue: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#333",
+  },
+  summaryCard: {
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 20,
+    borderRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 16,
+  },
+  summaryContent: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+  },
+  summaryItem: {
+    alignItems: "center",
+  },
+  summaryNumber: {
+    fontSize: 36,
+    fontWeight: "bold",
+    color: "#007bff",
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: "#666",
+    marginTop: 4,
+  },
+  recentCracksCard: {
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 20,
+    borderRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  viewAllLink: {
+    fontSize: 14,
+    color: "#007bff",
+    fontWeight: "600",
+  },
+  crackItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  crackInfo: {
+    flex: 1,
+  },
+  crackName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 4,
+  },
+  crackId: {
+    fontSize: 12,
+    color: "#999",
+  },
+  crackArrow: {
+    fontSize: 24,
+    color: "#ccc",
+  },
+  emptyCard: {
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+  },
+  buttonContainer: {
+    padding: 16,
+    backgroundColor: "#fff",
+    borderTopWidth: 1,
+    borderTopColor: "#e9ecef",
+  },
 });

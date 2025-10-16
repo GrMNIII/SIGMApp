@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, Alert, ScrollView, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import UIButton from '@/components/UIButton';
-import { api } from '@/src/api/client';
+import { readingService } from '@/src/database/readingService';
+import { crackService } from '@/src/database/crackService';
 
 interface ReadingData {
     crack_id: string; // TEXT NOT NULL
@@ -110,28 +111,30 @@ export default function ReadingCreate() {
     };
 
     // Función para verificar la existencia del crack
-    const checkCrackExistence = useCallback(async (cId: string) => {
-        setLoading(true);
-        setError('');
-        try {
-            await api.get(`/cracks/${cId}`);
-            setCrackExists(true); // Crack existe, muestra el formulario
-        } catch (err: any) {
-            if (err.response && err.response.status === 404) {
-                setError(`Error: No se encontró la grieta con ID "${cId}". No se puede registrar la lectura.`);
-                Alert.alert(
-                    "Error de Integridad",
-                    `La grieta con ID "${cId}" no existe. No se puede crear una lectura.`,
-                    [{ text: "Volver", onPress: () => router.back() }]
-                );
-            } else {
-                console.error("Error al verificar existencia de crack:", err);
-                setError('Error de conexión al verificar la grieta.');
-            }
-        } finally {
-            setLoading(false);
+    const checkCrackExistence = useCallback((cId: string) => {
+    setLoading(true);
+    setError('');
+
+    try {
+        const exists = crackService.exists(cId);
+        if (exists) {
+            setCrackExists(true);
+        } else {
+            setError(`Error: No se encontró la grieta con ID "${cId}". No se puede registrar la lectura.`);
+            Alert.alert(
+                "Error de Integridad",
+                `La grieta con ID "${cId}" no existe. No se puede crear una lectura.`,
+                [{ text: "Volver", onPress: () => router.back() }]
+            );
         }
-    }, [router]);
+    } catch (err) {
+        console.error("Error al verificar existencia de crack:", err);
+        setError('Error al verificar la grieta localmente.');
+    } finally {
+        setLoading(false);
+    }
+}, [router]);
+
 
     useEffect(() => {
         if (!projectId || !crackId) {
@@ -148,48 +151,35 @@ export default function ReadingCreate() {
 
     // Función principal para guardar la nueva lectura
     const handleSaveReading = async () => {
-        // Validación mínima
-        if (!readingData.fecha || !readingData.hora || !readingData.nombre_inspector || !readingData.lectura_x || !readingData.lectura_y) {
-            Alert.alert("Validación", "Debes completar la Fecha, Hora, Inspector y las Lecturas X/Y.");
-            return;
-        }
+    if (!readingData.fecha || !readingData.hora || !readingData.nombre_inspector || !readingData.lectura_x || !readingData.lectura_y) {
+        Alert.alert("Validación", "Debes completar la Fecha, Hora, Inspector y las Lecturas X/Y.");
+        return;
+    }
 
-        setLoading(true);
-        
-        // Creamos el payload final incluyendo el crack_id y limpiando nulos
-        const readingPayload: ReadingData = {
-            crack_id: crackId,
-            ...readingData,
-        } as ReadingData;
+    setLoading(true);
 
-        // Limpieza de nulos/vacíos para un payload más limpio
-        const cleanedPayload: Record<string, any> = {};
-        for (const key in readingPayload) {
-            const value = readingPayload[key as keyof ReadingData];
-            if (value !== null && value !== undefined && value !== '') {
-                cleanedPayload[key] = value;
-            }
-        }
-
-        try {
-            // Enviamos los datos al endpoint POST /readings
-            await api.post('/readings', cleanedPayload);
-            
-            Alert.alert("Éxito", `Lectura registrada para la grieta ${crackId}.`);
-            
-            // Volvemos a la pantalla de detalles de la grieta para ver la nueva lectura
-            router.replace({
-                pathname: '/crack-details',
-                params: { projectId: projectId, crackId: crackId }
-            });
-
-        } catch (err) {
-            console.error("Error al crear lectura:", err);
-            Alert.alert("Error de Creación", "Hubo un problema al guardar la lectura en el servidor.");
-        } finally {
-            setLoading(false);
-        }
+    const readingPayload = {
+        crack_id: crackId,
+        ...readingData,
     };
+
+    try {
+        // Usamos readingService en vez de api
+        readingService.create(readingPayload);
+
+        Alert.alert("Éxito", `Lectura registrada para la grieta ${crackId}.`);
+        // Volvemos a la pantalla de detalles
+        router.replace({
+            pathname: '/crack-details',
+            params: { projectId, crackId }
+        });
+    } catch (err) {
+        console.error("Error al crear lectura:", err);
+        Alert.alert("Error de Creación", "Hubo un problema al guardar la lectura localmente.");
+    } finally {
+        setLoading(false);
+    }
+};
 
     // --- RENDERIZADO DE ESTADOS ---
 
@@ -287,7 +277,7 @@ export default function ReadingCreate() {
                     <Text style={formStyles.sectionHeader}>3. Condiciones Ambientales</Text>
                 </View>
                 <FormInput 
-                    label="Temperatura ($^{\circ}C$)" 
+                    label="Temperatura (°C)" 
                     value={readingData.ambiente_temperatura_C} 
                     onChange={(text) => handleInputChange('ambiente_temperatura_C', text)} 
                     keyboardType="numeric" 

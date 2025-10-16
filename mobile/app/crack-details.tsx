@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import UIButton from '@/components/UIButton';
-import { api } from '@/src/api/client';
+import { crackService } from '@/src/database/crackService';
 
 // --- TIPOS DE DATOS COMPLETOS (Actualizado con todos los campos del esquema SQL) ---
 
@@ -78,27 +78,27 @@ export default function CrackDetails() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // Función que realiza la llamada a la API para obtener los detalles de la grieta
     const fetchCrackDetails = useCallback(async (pId: string, cId: string) => {
         setLoading(true);
         setError('');
-        
+
         try {
-            // Llama al endpoint que obtiene una grieta específica
-            const res = await api.get(`/cracks/${cId}`);
-            // NOTA: Asumimos que el backend solo necesita el ID de la grieta (cId) 
-            // ya que el endpoint es GET /cracks/:id. Si el routing del servidor 
-            // es `/projects/:pId/cracks/:cId`, la ruta anterior era correcta.
-            // Uso la más simple `crack/${cId}` basada en el router.get('/:id')
-            setCrackData(res.data);
+            const crack = await crackService.getById(cId);
+            if (!crack) {
+                setError(`No se encontró ninguna grieta con ID "${cId}" en la base de datos local.`);
+                Alert.alert("Grieta no encontrada", "No existe una grieta con ese ID en la base de datos local.", [
+                    { text: "Volver", onPress: () => router.back() }
+                ]);
+            } else {
+                // Actualiza el estado con los detalles de la grieta
+                setCrackData(crack);
+            }
         } catch (err) {
-            console.error("Error al cargar detalles de la grieta:", err);
-            setError('No se pudieron cargar los detalles de la grieta. Verifica el ID o el servidor.');
-            Alert.alert(
-                "Error de Carga", 
-                "No se pudieron obtener los datos de la grieta.",
-                [{ text: "Volver", onPress: () => router.back() }]
-            );
+            console.error("Error al obtener detalles locales:", err);
+            setError('Error al obtener los detalles de la grieta desde la base de datos local.');
+            Alert.alert("Error de Base de Datos", "Ocurrió un error al consultar los datos locales.", [
+                { text: "Volver", onPress: () => router.back() }
+            ]);
         } finally {
             setLoading(false);
         }

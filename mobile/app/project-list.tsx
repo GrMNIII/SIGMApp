@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,12 +8,14 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { useRouter } from "expo-router";
-// import * as FileSystem from "expo-file-system";
+import { useRouter, useFocusEffect } from "expo-router";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
+import * as XLSX from 'xlsx';
 import UIButton from "@/components/UIButton";
-import { api, BASE_URL } from "@/src/api/client";
+import { projectService } from "@/src/database/projectService";
+import { crackService } from "@/src/database/crackService";
+import { readingService } from "@/src/database/readingService";
 
 // Tipado para el Project con ID como number
 type Project = {
@@ -26,54 +28,85 @@ export default function ProjectList() {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isExporting, setIsExporting] = useState(false); // Estado para la exportación
+  const [isExporting, setIsExporting] = useState(false);
 
-  // Función de carga de proyectos
-  const fetchProjects = async () => {
+  // Función de carga de proyectos desde SQLite
+  const fetchProjects = () => {
     setLoading(true);
     try {
-      const res = await api.get("/projects");
-      setProjects(res.data);
+      const data = projectService.getAll();
+      setProjects(data as Project[]);
+      console.log(`${data.length} proyectos cargados desde SQLite`);
     } catch (error: any) {
       console.error("Error al cargar proyectos:", error);
-      // Mostrar un mensaje de error más claro al usuario
       Alert.alert(
-        "Error de Conexión",
-        "No se pudieron cargar los proyectos. Revisa tu conexión de red o la URL del backend."
+        "Error",
+        "No se pudieron cargar los proyectos desde la base de datos local."
       );
     } finally {
       setLoading(false);
     }
   };
 
-  // --- LÓGICA DE EXPORTACIÓN A CSV ---
+  // Recargar proyectos cuando la pantalla recibe el foco
+  useFocusEffect(
+    useCallback(() => {
+      fetchProjects();
+    }, [])
+  );
+
+  // --- LÓGICA DE EXPORTACIÓN A EXCEL LOCAL ---
   const handleExportPress = async () => {
     if (isExporting) return;
 
     setIsExporting(true);
 
-    const exportUrl = `${BASE_URL}/export/complete`;
-    const fileName = `datos_completos_${new Date().toISOString().split("T")[0]}.xlsx`;
-    const fileUri = FileSystem.cacheDirectory + fileName;
-
-    console.log(`Iniciando descarga completa de: ${exportUrl}`);
-
     try {
-      const downloadResponse = await FileSystem.downloadAsync(
-        exportUrl,
-        fileUri
-      );
+      console.log('Iniciando exportación local...');
 
-      if (downloadResponse.status !== 200) {
-        Alert.alert(
-          "Error de Exportación",
-          `El servidor devolvió un error: ${downloadResponse.status}`
-        );
-        return;
+      // Obtener todos los datos de SQLite
+      const projectsData = projectService.getAll();
+      const cracksData = crackService.getAll();
+      const readingsData = readingService.getAll();
+
+      console.log(`Proyectos: ${projectsData.length}, Grietas: ${cracksData.length}, Lecturas: ${readingsData.length}`);
+
+      // Crear workbook
+      const wb = XLSX.utils.book_new();
+
+      // Hoja 1: Proyectos
+      if (projectsData.length > 0) {
+        const wsProjects = XLSX.utils.json_to_sheet(projectsData);
+        XLSX.utils.book_append_sheet(wb, wsProjects, "Proyectos");
       }
 
-      console.log(`Archivo Excel descargado en: ${downloadResponse.uri}`);
+      // Hoja 2: Grietas
+      if (cracksData.length > 0) {
+        const wsCracks = XLSX.utils.json_to_sheet(cracksData);
+        XLSX.utils.book_append_sheet(wb, wsCracks, "Grietas");
+      }
 
+      // Hoja 3: Registros
+      if (readingsData.length > 0) {
+        const wsReadings = XLSX.utils.json_to_sheet(readingsData);
+        XLSX.utils.book_append_sheet(wb, wsReadings, "Registros");
+      }
+
+      // Generar archivo en base64
+      const wbout = XLSX.write(wb, { type: 'base64', bookType: "xlsx" });
+      
+      const fileName = `datos_completos_${new Date().toISOString().split("T")[0]}.xlsx`;
+      const fileUri = FileSystem.cacheDirectory + fileName;
+      
+      console.log(`Guardando archivo en: ${fileUri}`);
+      
+      await FileSystem.writeAsStringAsync(fileUri, wbout, {
+        encoding: FileSystem.EncodingType.Base64
+      });
+
+      console.log('Archivo generado correctamente');
+
+      // Verificar disponibilidad de compartir
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
         Alert.alert(
@@ -83,15 +116,19 @@ export default function ProjectList() {
         return;
       }
 
-      await Sharing.shareAsync(downloadResponse.uri, {
+      // Compartir archivo
+      await Sharing.shareAsync(fileUri, {
         mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         dialogTitle: "Exportar Datos Completos a Excel",
       });
+
+      console.log('Archivo compartido exitosamente');
+
     } catch (error: any) {
       console.error("Error completo en la exportación:", error);
       Alert.alert(
         "Exportación Fallida",
-        "No se pudo generar ni descargar el archivo Excel."
+        `No se pudo generar el archivo Excel: ${error.message}`
       );
     } finally {
       setIsExporting(false);
@@ -99,19 +136,13 @@ export default function ProjectList() {
   };
   // -------------------------------------
 
-  // Cargamos los proyectos al montar el componente
-  useEffect(() => {
-    fetchProjects();
-  }, []);
-
   // Función para navegar a la pantalla principal de un proyecto
   const handleProjectPress = (p: Project) => {
-    // CORRECCIÓN CLAVE: Usamos la ruta estática /project-main y pasamos el ID como parámetro
     router.push({
-      pathname: "/project-main" as any, // Ruta estática
+      pathname: "/project-main" as any,
       params: {
-        projectId: p.id.toString(), // ID del proyecto (se lee en project-main.tsx)
-        project: JSON.stringify(p), // Objeto pre-cargado (optimización)
+        projectId: p.id.toString(),
+        project: JSON.stringify(p),
       },
     });
   };
@@ -125,6 +156,9 @@ export default function ProjectList() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007bff" />
+        <Text style={{ marginTop: 10, color: "#666" }}>
+          Cargando proyectos...
+        </Text>
       </View>
     );
   }
@@ -146,17 +180,16 @@ export default function ProjectList() {
         ))}
         {projects.length === 0 && (
           <Text style={styles.emptyText}>
-            No hay proyectos registrados. Crea uno.
+            No hay proyectos registrados. Crea uno para comenzar.
           </Text>
         )}
       </ScrollView>
       <View style={styles.buttonContainer}>
-        {/* Botón para Exportar Proyectos */}
+        {/* Botón para Exportar a Excel */}
         <UIButton
           title={isExporting ? "Exportando..." : "Exportar a Excel"}
           onPress={handleExportPress}
-          disabled={isExporting} // Deshabilitar durante la exportación
-          // Estilo secundario para diferenciar
+          disabled={isExporting}
           style={{
             backgroundColor: isExporting ? "#ffc107" : "#28a745",
             marginBottom: 10,
@@ -177,6 +210,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "#f5f5f5",
   },
   container: {
     flex: 1,
