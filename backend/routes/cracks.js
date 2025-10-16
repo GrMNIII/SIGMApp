@@ -67,4 +67,34 @@ router.delete('/:id', (req, res) => {
   }
 });
 
+/**
+ * NUEVO ENDPOINT DE EXPORTACIÓN: GET /cracks/export
+ * Exporta todos los proyectos a un archivo CSV.
+ */
+router.get('/export', (req, res) => {
+  try {
+      // Consultar todos los datos de la tabla 'cracks'
+      const data = db.prepare('SELECT * FROM cracks').all();
+
+      if (data.length === 0) {
+          return res.status(404).send("No se encontraron cracks para exportar.");
+      }
+
+      // Convertir JSON (array de objetos) a CSV
+      const json2csvParser = new Parser({});
+      const csv = json2csvParser.parse(data);
+
+      // Configuración de los encabezados para forzar la descarga
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=cracks_registrados.csv');
+      
+      // Envía el contenido CSV
+      res.status(200).send(csv);
+
+  } catch (error) {
+      console.error("Error al exportar cracks a CSV:", error);
+      res.status(500).send("Error interno del servidor al procesar la exportación de cracks.");
+  }
+});
+
 module.exports = router;

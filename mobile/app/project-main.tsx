@@ -187,7 +187,7 @@ export default function ProjectMain() {
             
             <View style={styles.buttonContainer}>
                 <UIButton 
-                    title="Ver Cracks Existentes" 
+                    title="Ver Grietas Existentes" 
                     onPress={() => router.push({
                         pathname: '/crack-list' as any, 
                         params: { projectId: project.id.toString() }

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Alert, ScrollView, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Alert, ScrollView, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import UIButton from '@/components/UIButton';
 import { api } from '@/src/api/client';
 
+// Tipos de Grieta (mantener en el código)
 interface CrackData {
     // Campos Obligatorios (NOT NULL)
     id: string; // TEXT PRIMARY KEY
@@ -78,9 +79,19 @@ interface FormInputProps {
     onChange: (text: string) => void;
     keyboardType?: 'default' | 'numeric' | 'email-address' | 'phone-pad';
     required?: boolean;
+    // Agregamos el placeholder como propiedad opcional
+    placeholder?: string;
 }
 
-const FormInput = ({ label, value, onChange, keyboardType = 'default', required = false }: FormInputProps) => (
+const FormInput = ({ 
+    label, 
+    value, 
+    onChange, 
+    keyboardType = 'default', 
+    required = false, 
+    // Usamos el placeholder pasado o generamos uno simple por defecto
+    placeholder = `Ingresar ${label.toLowerCase()}` 
+}: FormInputProps) => (
     <View style={formStyles.inputGroup}>
         <Text style={formStyles.label}>{label}{required && <Text style={{ color: 'red' }}>*</Text>}</Text>
         <TextInput
@@ -88,10 +99,119 @@ const FormInput = ({ label, value, onChange, keyboardType = 'default', required 
             value={typeof value === 'number' ? value.toString() : (value || '')}
             onChangeText={onChange}
             keyboardType={keyboardType}
-            placeholder={`Ingresar ${label.toLowerCase()}`}
+            placeholder={placeholder}
         />
     </View>
 );
+
+// --- NUEVO COMPONENTE: Selector de Orientación ---
+interface DirectionSelectorProps {
+    label: string;
+    currentValue: string | null;
+    onSelect: (direction: string) => void;
+}
+
+const DIRECTIONS = ['Norte', 'Sur', 'Este', 'Oeste'];
+
+const DirectionSelector = ({ label, currentValue, onSelect }: DirectionSelectorProps) => (
+    <View style={formStyles.inputGroup}>
+        <Text style={formStyles.label}>{label}</Text>
+        <View style={directionSelectorStyles.container}>
+            {DIRECTIONS.map((dir) => (
+                <TouchableOpacity
+                    key={dir}
+                    style={[
+                        directionSelectorStyles.button,
+                        currentValue === dir && directionSelectorStyles.buttonSelected,
+                    ]}
+                    onPress={() => onSelect(dir)}
+                >
+                    <Text 
+                        style={[
+                            directionSelectorStyles.buttonText,
+                            currentValue === dir && directionSelectorStyles.buttonTextSelected,
+                        ]}
+                    >
+                        {dir.charAt(0)}
+                    </Text>
+                    {/* Texto completo visible para mayor claridad */}
+                    <Text 
+                        style={[
+                            directionSelectorStyles.fullText,
+                            currentValue === dir && directionSelectorStyles.buttonTextSelected,
+                        ]}
+                    >
+                        {dir}
+                    </Text>
+                </TouchableOpacity>
+            ))}
+        </View>
+    </View>
+);
+// --- FIN NUEVO COMPONENTE DirectionSelector ---
+
+// --- NUEVO COMPONENTE: Selector de Fecha y Hora de Instalación ---
+interface InstallationDateTimeSelectorProps {
+    dateValue: string | null;
+    timeValue: string | null;
+    onDateChange: (date: string) => void;
+    onTimeChange: (time: string) => void;
+    labelDate: string;
+    labelTime: string;
+}
+
+const InstallationDateTimeSelector = ({ 
+    dateValue, timeValue, onDateChange, onTimeChange, labelDate, labelTime 
+}: InstallationDateTimeSelectorProps) => {
+
+    const setNow = () => {
+        const now = new Date();
+        // Formato YYYY-MM-DD
+        const dateString = now.toISOString().split('T')[0];
+        // Formato HH:MM
+        const timeString = now.toTimeString().split(' ')[0].substring(0, 5);
+        onDateChange(dateString);
+        onTimeChange(timeString);
+    };
+
+    return (
+        <View>
+            <View style={formStyles.inputGroup}>
+                <Text style={formStyles.label}>{labelDate}</Text>
+                <View style={installationDateTimeStyles.dateTimeContainer}>
+                    <TextInput
+                        style={[formStyles.input, installationDateTimeStyles.dateTimeInput]}
+                        value={dateValue || ''}
+                        onChangeText={onDateChange}
+                        placeholder="AAAA-MM-DD (Ej: 2024-10-15)"
+                        keyboardType="default"
+                    />
+                    <TouchableOpacity style={installationDateTimeStyles.dateTimeButton} onPress={() => onDateChange(new Date().toISOString().split('T')[0])}>
+                        <Text style={installationDateTimeStyles.buttonText}>Hoy</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+
+            <View style={formStyles.inputGroup}>
+                <Text style={formStyles.label}>{labelTime}</Text>
+                <View style={installationDateTimeStyles.dateTimeContainer}>
+                    <TextInput
+                        style={[formStyles.input, installationDateTimeStyles.dateTimeInput]}
+                        value={timeValue || ''}
+                        onChangeText={onTimeChange}
+                        placeholder="HH:MM (Ej: 14:30)"
+                        keyboardType="default"
+                    />
+                    <TouchableOpacity style={installationDateTimeStyles.dateTimeButton} onPress={() => onTimeChange(new Date().toTimeString().split(' ')[0].substring(0, 5))}>
+                        <Text style={installationDateTimeStyles.buttonText}>Ahora</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        </View>
+    );
+};
+// --- FIN NUEVO COMPONENTE InstallationDateTimeSelector ---
+
 
 export default function CrackCreate() {
     const router = useRouter();
@@ -130,6 +250,45 @@ export default function CrackCreate() {
             return { ...prev, [key]: newValue };
         });
     };
+    
+    // Función específica para manejar la orientación de la grieta
+    const handleOrientationSelect = (orientation: string) => {
+        setNewCrackData(prev => {
+            if (!prev) return null;
+            
+            // Si selecciona el mismo valor, lo deselecciona (lo pone en null)
+            const newValue = prev.grieta_orientacion === orientation ? null : orientation;
+            
+            return { ...prev, grieta_orientacion: newValue };
+        });
+    };
+
+    // Efecto para auto-poblar la fecha y hora de instalación con el momento actual
+    useEffect(() => {
+        if (existsCheckDone && newCrackData) {
+            
+            // Verificamos si ya tienen un valor
+            if (newCrackData.instalacion_fecha && newCrackData.instalacion_hora) {
+                return;
+            }
+            
+            const now = new Date();
+            const dateString = now.toISOString().split('T')[0]; // YYYY-MM-DD
+            const timeString = now.toTimeString().split(' ')[0].substring(0, 5); // HH:MM
+
+            setNewCrackData(prev => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    // Solo actualiza si es null
+                    instalacion_fecha: prev.instalacion_fecha || dateString,
+                    instalacion_hora: prev.instalacion_hora || timeString,
+                };
+            });
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [existsCheckDone]);
+
 
     // Función para verificar si la grieta existe
     const checkCrackExistence = useCallback(async (cId: string) => {
@@ -145,7 +304,7 @@ export default function CrackCreate() {
                 [{ 
                     text: "Ver Detalles", 
                     onPress: () => router.replace({
-                        pathname: '/crack-details',
+                        pathname: '/crack-details' as any,
                         params: { projectId: projectId, crackId: cId }
                     }) 
                 }]
@@ -171,7 +330,7 @@ export default function CrackCreate() {
             Alert.alert(
                 "Error de Navegación", 
                 "Faltan los IDs del proyecto o de la grieta.",
-                [{ text: "Volver a Proyectos", onPress: () => router.replace('/') }]
+                [{ text: "Volver a Proyectos", onPress: () => router.replace('/project-list' as any) }]
             );
             return;
         }
@@ -236,12 +395,12 @@ export default function CrackCreate() {
     }
 
     if (error && !loading) {
-         return (
-             <View style={styles.loadingContainer}>
-                 <Text style={styles.errorText}>{error}</Text>
-                 <UIButton title="Regresar" onPress={() => router.back()} style={{ marginTop: 20 }} />
-             </View>
-         );
+            return (
+                <View style={styles.loadingContainer}>
+                    <Text style={styles.errorText}>{error}</Text>
+                    <UIButton title="Regresar" onPress={() => router.back()} style={{ marginTop: 20 }} />
+                </View>
+            );
     }
     
     // --- RENDERIZADO PRINCIPAL (Formulario) ---
@@ -268,66 +427,212 @@ export default function CrackCreate() {
                     value={newCrackData.name}
                     onChange={(text) => handleInputChange('name', text)}
                     required
+                    placeholder="Ej: Muro Exterior L-3, Viga 1 Sur"
                 />
                 
                 {/* SECCIÓN 1: LOCALIZACIÓN */}
                 <View style={formStyles.sectionHeaderContainer}>
                     <Text style={formStyles.sectionHeader}>1. Localización</Text>
                 </View>
-                <FormInput label="Edificio/Área" value={newCrackData.edificio_area} onChange={(text) => handleInputChange('edificio_area', text)} />
-                <FormInput label="Nivel/Cota" value={newCrackData.nivel_cota} onChange={(text) => handleInputChange('nivel_cota', text)} />
-                <FormInput label="Muro" value={newCrackData.muro} onChange={(text) => handleInputChange('muro', text)} />
-                <FormInput label="Cara" value={newCrackData.cara} onChange={(text) => handleInputChange('cara', text)} />
-                <FormInput label="GPS Latitud" value={newCrackData.gps_lat} onChange={(text) => handleInputChange('gps_lat', text)} keyboardType="numeric" />
-                <FormInput label="GPS Longitud" value={newCrackData.gps_lon} onChange={(text) => handleInputChange('gps_lon', text)} keyboardType="numeric" />
+                <FormInput 
+                    label="Edificio/Área" 
+                    value={newCrackData.edificio_area} 
+                    onChange={(text) => handleInputChange('edificio_area', text)} 
+                    placeholder="Ej: Edificio A / Sótano 1"
+                />
+                <FormInput 
+                    label="Nivel/Cota" 
+                    value={newCrackData.nivel_cota} 
+                    onChange={(text) => handleInputChange('nivel_cota', text)} 
+                    placeholder="Ej: Piso 5 / Cota +15.00"
+                />
+                <FormInput 
+                    label="Muro" 
+                    value={newCrackData.muro} 
+                    onChange={(text) => handleInputChange('muro', text)} 
+                    placeholder="Ej: Muro 4-A / Columna 5"
+                />
+                <FormInput 
+                    label="Cara" 
+                    value={newCrackData.cara} 
+                    onChange={(text) => handleInputChange('cara', text)} 
+                    placeholder="Ej: Cara Interior / Cara Este"
+                />
+                <FormInput 
+                    label="GPS Latitud" 
+                    value={newCrackData.gps_lat} 
+                    onChange={(text) => handleInputChange('gps_lat', text)} 
+                    keyboardType="numeric" 
+                    placeholder="Ej: -33.4567 (formato decimal)"
+                />
+                <FormInput 
+                    label="GPS Longitud" 
+                    value={newCrackData.gps_lon} 
+                    onChange={(text) => handleInputChange('gps_lon', text)} 
+                    keyboardType="numeric" 
+                    placeholder="Ej: -70.6483 (formato decimal)"
+                />
                 
                 {/* SECCIÓN 2: ELEMENTO */}
                 <View style={formStyles.sectionHeaderContainer}>
                     <Text style={formStyles.sectionHeader}>2. Elemento Estructural</Text>
                 </View>
-                <FormInput label="Tipo de Elemento" value={newCrackData.elemento_tipo} onChange={(text) => handleInputChange('elemento_tipo', text)} />
-                <FormInput label="Material" value={newCrackData.elemento_material} onChange={(text) => handleInputChange('elemento_material', text)} />
-                <FormInput label="Espesor (cm)" value={newCrackData.elemento_espesor_cm} onChange={(text) => handleInputChange('elemento_espesor_cm', text)} keyboardType="numeric" />
+                <FormInput 
+                    label="Tipo de Elemento" 
+                    value={newCrackData.elemento_tipo} 
+                    onChange={(text) => handleInputChange('elemento_tipo', text)} 
+                    placeholder="Ej: Muro de Hormigón / Losa de Acero"
+                />
+                <FormInput 
+                    label="Material" 
+                    value={newCrackData.elemento_material} 
+                    onChange={(text) => handleInputChange('elemento_material', text)} 
+                    placeholder="Ej: Hormigón Armado / Albañilería"
+                />
+                <FormInput 
+                    label="Espesor (cm)" 
+                    value={newCrackData.elemento_espesor_cm} 
+                    onChange={(text) => handleInputChange('elemento_espesor_cm', text)} 
+                    keyboardType="numeric" 
+                    placeholder="Ej: 20.5 (en centímetros)"
+                />
 
                 {/* SECCIÓN 3: CARACTERÍSTICAS DE LA GRIETA */}
                 <View style={formStyles.sectionHeaderContainer}>
                     <Text style={formStyles.sectionHeader}>3. Grieta</Text>
                 </View>
-                <FormInput label="Orientación" value={newCrackData.grieta_orientacion} onChange={(text) => handleInputChange('grieta_orientacion', text)} />
-                <FormInput label="Clasificación Preliminar" value={newCrackData.grieta_clasificacion_preliminar} onChange={(text) => handleInputChange('grieta_clasificacion_preliminar', text)} />
-                <FormInput label="Longitud Visible (m)" value={newCrackData.grieta_longitud_visible_m} onChange={(text) => handleInputChange('grieta_longitud_visible_m', text)} keyboardType="numeric" />
-                <FormInput label="Ancho Inicial (mm)" value={newCrackData.grieta_ancho_inicial_mm} onChange={(text) => handleInputChange('grieta_ancho_inicial_mm', text)} keyboardType="numeric" />
+                {/* CAMBIO: Usar el selector de dirección */}
+                <DirectionSelector 
+                    label="Orientación de la Grieta" 
+                    currentValue={newCrackData.grieta_orientacion} 
+                    onSelect={handleOrientationSelect}
+                />
+                {/* FIN CAMBIO */}
+                <FormInput 
+                    label="Clasificación Preliminar" 
+                    value={newCrackData.grieta_clasificacion_preliminar} 
+                    onChange={(text) => handleInputChange('grieta_clasificacion_preliminar', text)} 
+                    placeholder="Ej: Transversal / Fisura por retracción"
+                />
+                <FormInput 
+                    label="Longitud Visible (m)" 
+                    value={newCrackData.grieta_longitud_visible_m} 
+                    onChange={(text) => handleInputChange('grieta_longitud_visible_m', text)} 
+                    keyboardType="numeric" 
+                    placeholder="Ej: 2.5 (en metros)"
+                />
+                <FormInput 
+                    label="Ancho Inicial (mm)" 
+                    value={newCrackData.grieta_ancho_inicial_mm} 
+                    onChange={(text) => handleInputChange('grieta_ancho_inicial_mm', text)} 
+                    keyboardType="numeric" 
+                    placeholder="Ej: 0.5 (en milímetros)"
+                />
 
                 {/* SECCIÓN 4: INSTRUMENTACIÓN */}
                 <View style={formStyles.sectionHeaderContainer}>
                     <Text style={formStyles.sectionHeader}>4. Instrumentación</Text>
                 </View>
-                <FormInput label="Modelo" value={newCrackData.instrumentacion_modelo} onChange={(text) => handleInputChange('instrumentacion_modelo', text)} />
-                <FormInput label="N. Serie" value={newCrackData.instrumentacion_n_serie} onChange={(text) => handleInputChange('instrumentacion_n_serie', text)} />
-                <FormInput label="Resolución (mm)" value={newCrackData.instrumentacion_resolucion_mm} onChange={(text) => handleInputChange('instrumentacion_resolucion_mm', text)} keyboardType="numeric" />
-                <FormInput label="Eje X" value={newCrackData.instrumentacion_eje_x} onChange={(text) => handleInputChange('instrumentacion_eje_x', text)} keyboardType="numeric" />
-                <FormInput label="Eje Y" value={newCrackData.instrumentacion_eje_y} onChange={(text) => handleInputChange('instrumentacion_eje_y', text)} keyboardType="numeric" />
-                <FormInput label="Lectura Cero" value={newCrackData.instrumentacion_lectura_cero} onChange={(text) => handleInputChange('instrumentacion_lectura_cero', text)} keyboardType="numeric" />
-                <FormInput label="Adhesivo" value={newCrackData.instrumentacion_adhesivo} onChange={(text) => handleInputChange('instrumentacion_adhesivo', text)} />
+                <FormInput 
+                    label="Modelo" 
+                    value={newCrackData.instrumentacion_modelo} 
+                    onChange={(text) => handleInputChange('instrumentacion_modelo', text)} 
+                    placeholder="Ej: Modelo V-10 / Placa de vidrio"
+                />
+                <FormInput 
+                    label="N. Serie" 
+                    value={newCrackData.instrumentacion_n_serie} 
+                    onChange={(text) => handleInputChange('instrumentacion_n_serie', text)} 
+                    placeholder="Ej: SN-A12345 / 001-ALPHA"
+                />
+                <FormInput 
+                    label="Resolución (mm)" 
+                    value={newCrackData.instrumentacion_resolucion_mm} 
+                    onChange={(text) => handleInputChange('instrumentacion_resolucion_mm', text)} 
+                    keyboardType="numeric" 
+                    placeholder="Ej: 0.1 (resolución mínima)"
+                />
+                <FormInput 
+                    label="Eje X" 
+                    value={newCrackData.instrumentacion_eje_x} 
+                    onChange={(text) => handleInputChange('instrumentacion_eje_x', text)} 
+                    keyboardType="numeric" 
+                    placeholder="Coordenada X del testigo (numérico)"
+                />
+                <FormInput 
+                    label="Eje Y" 
+                    value={newCrackData.instrumentacion_eje_y} 
+                    onChange={(text) => handleInputChange('instrumentacion_eje_y', text)} 
+                    keyboardType="numeric" 
+                    placeholder="Coordenada Y del testigo (numérico)"
+                />
+                <FormInput 
+                    label="Lectura Cero" 
+                    value={newCrackData.instrumentacion_lectura_cero} 
+                    onChange={(text) => handleInputChange('instrumentacion_lectura_cero', text)} 
+                    keyboardType="numeric" 
+                    placeholder="Valor inicial del sensor (mm)"
+                />
+                <FormInput 
+                    label="Adhesivo" 
+                    value={newCrackData.instrumentacion_adhesivo} 
+                    onChange={(text) => handleInputChange('instrumentacion_adhesivo', text)} 
+                    placeholder="Ej: Epóxico / Mortero"
+                />
 
-                {/* SECCIÓN 5: INSTALACIÓN */}
+                {/* SECCIÓN 5: INSTALACIÓN - Reemplazado por InstallationDateTimeSelector */}
                 <View style={formStyles.sectionHeaderContainer}>
                     <Text style={formStyles.sectionHeader}>5. Instalación</Text>
                 </View>
-                {/* Nota: Idealmente usar DatePicker/TimePicker */}
-                <FormInput label="Fecha de Instalación" value={newCrackData.instalacion_fecha} onChange={(text) => handleInputChange('instalacion_fecha', text)} />
-                <FormInput label="Hora de Instalación" value={newCrackData.instalacion_hora} onChange={(text) => handleInputChange('instalacion_hora', text)} />
-                <FormInput label="Instalador" value={newCrackData.instalacion_instalador} onChange={(text) => handleInputChange('instalacion_instalador', text)} />
+                
+                <InstallationDateTimeSelector
+                    labelDate="Fecha de Instalación (AAAA-MM-DD)"
+                    labelTime="Hora de Instalación (HH:MM)"
+                    dateValue={newCrackData.instalacion_fecha}
+                    timeValue={newCrackData.instalacion_hora}
+                    onDateChange={(text) => handleInputChange('instalacion_fecha', text)}
+                    onTimeChange={(text) => handleInputChange('instalacion_hora', text)}
+                />
+
+                <FormInput 
+                    label="Instalador" 
+                    value={newCrackData.instalacion_instalador} 
+                    onChange={(text) => handleInputChange('instalacion_instalador', text)} 
+                    placeholder="Ej: Juan Pérez"
+                />
                 {/* Nota: instalacion_foto requeriría un componente de cámara/galería */}
-                <FormInput label="Observaciones" value={newCrackData.instalacion_observaciones} onChange={(text) => handleInputChange('instalacion_observaciones', text)} />
+                <FormInput 
+                    label="Observaciones" 
+                    value={newCrackData.instalacion_observaciones} 
+                    onChange={(text) => handleInputChange('instalacion_observaciones', text)} 
+                    placeholder="Detalles del montaje, clima, o dificultades"
+                />
 
                 {/* SECCIÓN 6: UMBRALES */}
                 <View style={formStyles.sectionHeaderContainer}>
                     <Text style={formStyles.sectionHeader}>6. Umbrales de Alerta (mm)</Text>
                 </View>
-                <FormInput label="Umbral Verde" value={newCrackData.umbral_verde_mm_sem} onChange={(text) => handleInputChange('umbral_verde_mm_sem', text)} keyboardType="numeric" />
-                <FormInput label="Umbral Amarillo" value={newCrackData.umbral_amarillo_mm_scm} onChange={(text) => handleInputChange('umbral_amarillo_mm_scm', text)} keyboardType="numeric" />
-                <FormInput label="Umbral Rojo" value={newCrackData.umbral_rojo_mm_scm} onChange={(text) => handleInputChange('umbral_rojo_mm_scm', text)} keyboardType="numeric" />
+                <FormInput 
+                    label="Umbral Verde" 
+                    value={newCrackData.umbral_verde_mm_sem} 
+                    onChange={(text) => handleInputChange('umbral_verde_mm_sem', text)} 
+                    keyboardType="numeric" 
+                    placeholder="Ej: 0.05 (mm/semana)"
+                />
+                <FormInput 
+                    label="Umbral Amarillo" 
+                    value={newCrackData.umbral_amarillo_mm_scm} 
+                    onChange={(text) => handleInputChange('umbral_amarillo_mm_scm', text)} 
+                    keyboardType="numeric" 
+                    placeholder="Ej: 0.1 (mm/semana acumulada)"
+                />
+                <FormInput 
+                    label="Umbral Rojo" 
+                    value={newCrackData.umbral_rojo_mm_scm} 
+                    onChange={(text) => handleInputChange('umbral_rojo_mm_scm', text)} 
+                    keyboardType="numeric" 
+                    placeholder="Ej: 0.2 (mm/semana acumulada)"
+                />
 
                 
                 <View style={{ marginTop: 20, marginBottom: 50 }}>
@@ -341,6 +646,73 @@ export default function CrackCreate() {
         </KeyboardAvoidingView>
     );
 }
+
+const directionSelectorStyles = StyleSheet.create({
+    container: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        backgroundColor: '#fff',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#ccc',
+        overflow: 'hidden',
+    },
+    button: {
+        flex: 1,
+        padding: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRightWidth: 1,
+        borderRightColor: '#eee',
+        // Estilo base para el botón no seleccionado
+        backgroundColor: '#f9f9f9',
+    },
+    buttonSelected: {
+        backgroundColor: '#007bff', // Azul primario cuando está seleccionado
+        borderRightColor: '#007bff',
+    },
+    buttonText: {
+        fontSize: 24, // Letra grande
+        fontWeight: 'bold',
+        color: '#333',
+    },
+    fullText: {
+        fontSize: 10,
+        color: '#666',
+    },
+    buttonTextSelected: {
+        color: '#fff', // Texto blanco cuando está seleccionado
+    }
+});
+
+const installationDateTimeStyles = StyleSheet.create({
+    dateTimeContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    dateTimeInput: {
+        flex: 1,
+        borderTopRightRadius: 0,
+        borderBottomRightRadius: 0,
+        marginRight: -1, // Para superponer el borde
+    },
+    dateTimeButton: {
+        backgroundColor: '#007bff',
+        paddingVertical: 12,
+        paddingHorizontal: 15,
+        borderRadius: 8,
+        borderTopLeftRadius: 0,
+        borderBottomLeftRadius: 0,
+        justifyContent: 'center',
+        height: 48, // Ajusta la altura para que coincida con TextInput
+    },
+    buttonText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 16,
+    }
+});
 
 const styles = StyleSheet.create({
     container: {

@@ -52,12 +52,11 @@ export default function ProjectList() {
 
     setIsExporting(true);
 
-    const exportUrl = `${BASE_URL}/projects/export`;
-    const fileName = `proyectos_${new Date().toISOString().split("T")[0]}.csv`;
-
+    const exportUrl = `${BASE_URL}/export/complete`;
+    const fileName = `datos_completos_${new Date().toISOString().split("T")[0]}.xlsx`;
     const fileUri = FileSystem.cacheDirectory + fileName;
 
-    console.log(`Iniciando descarga de: ${exportUrl}`);
+    console.log(`Iniciando descarga completa de: ${exportUrl}`);
 
     try {
       const downloadResponse = await FileSystem.downloadAsync(
@@ -73,7 +72,7 @@ export default function ProjectList() {
         return;
       }
 
-      console.log(`Archivo descargado en: ${downloadResponse.uri}`);
+      console.log(`Archivo Excel descargado en: ${downloadResponse.uri}`);
 
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
@@ -85,14 +84,14 @@ export default function ProjectList() {
       }
 
       await Sharing.shareAsync(downloadResponse.uri, {
-        mimeType: "text/csv",
-        dialogTitle: "Exportar Proyectos CSV",
+        mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        dialogTitle: "Exportar Datos Completos a Excel",
       });
     } catch (error: any) {
       console.error("Error completo en la exportación:", error);
       Alert.alert(
         "Exportación Fallida",
-        "No se pudo generar ni descargar el archivo CSV."
+        "No se pudo generar ni descargar el archivo Excel."
       );
     } finally {
       setIsExporting(false);
@@ -154,7 +153,7 @@ export default function ProjectList() {
       <View style={styles.buttonContainer}>
         {/* Botón para Exportar Proyectos */}
         <UIButton
-          title={isExporting ? "Exportando..." : "Exportar Proyectos a CSV"}
+          title={isExporting ? "Exportando..." : "Exportar a Excel"}
           onPress={handleExportPress}
           disabled={isExporting} // Deshabilitar durante la exportación
           // Estilo secundario para diferenciar
