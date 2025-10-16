@@ -210,7 +210,7 @@ export default function ProjectMain() {
 
         {/* Resumen de Grietas */}
         <View style={styles.summaryCard}>
-          <Text style={styles.sectionTitle}>📊 Resumen</Text>
+          <Text style={styles.sectionTitle}>Resumen</Text>
           {cracksLoading ? (
             <ActivityIndicator size="small" color="#007bff" />
           ) : (
@@ -229,7 +229,7 @@ export default function ProjectMain() {
         {cracks.length > 0 && (
           <View style={styles.recentCracksCard}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>🔍 Grietas Recientes</Text>
+              <Text style={styles.sectionTitle}>Grietas Recientes</Text>
               <TouchableOpacity onPress={handleViewCracks}>
                 <Text style={styles.viewAllLink}>Ver todas →</Text>
               </TouchableOpacity>
@@ -266,19 +266,19 @@ export default function ProjectMain() {
       {/* Botones de Acción */}
       <View style={styles.buttonContainer}>
         <UIButton
-          title="📷 Escanear QR para Nueva Grieta"
+          title="Escanear QR para Nueva Grieta"
           onPress={handleScanQR}
           style={{ backgroundColor: "#007bff", marginBottom: 10 }}
         />
 
         <UIButton
-          title="📋 Ver Todas las Grietas"
+          title="Ver Todas las Grietas"
           onPress={handleViewCracks}
           style={{ backgroundColor: "#28a745", marginBottom: 10 }}
         />
 
         <UIButton
-          title="🗑️ Eliminar Proyecto"
+          title="Eliminar Proyecto"
           onPress={handleDeleteProject}
           style={{ backgroundColor: "#dc3545" }}
         />
