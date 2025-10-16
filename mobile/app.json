@@ -1,15 +1,16 @@
 {
   "expo": {
-    "name": "mobile",
+    "name": "SIGMApp",
     "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
+    "scheme": "sigmapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.grmnjr.sigmapp"
     },
     "android": {
       "adaptiveIcon": {
@@ -23,7 +24,7 @@
       "permissions": [
         "android.permission.CAMERA"
       ],
-      "package": "com.grmnjr.sigm"
+      "package": "com.grmnjr.sigmapp"
     },
     "web": {
       "output": "static",
@@ -43,7 +44,14 @@
           }
         }
       ],
-      "expo-barcode-scanner",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "La aplicación necesita acceso a tu cámara para escanear códigos QR.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
       "expo-sqlite"
     ],
     "experiments": {
