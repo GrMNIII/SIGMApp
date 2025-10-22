@@ -93,7 +93,9 @@ const ReadingDateTimeSelector = ({
           <TouchableOpacity
             style={dateTimeStyles.dateTimeButton}
             onPress={() =>
-              onTimeChange(new Date().toTimeString().split(" ")[0].substring(0, 5))
+              onTimeChange(
+                new Date().toTimeString().split(" ")[0].substring(0, 5)
+              )
             }
           >
             <Text style={dateTimeStyles.buttonText}>Ahora</Text>
@@ -253,8 +255,8 @@ export default function ReadingCreate() {
       !readingData.fecha ||
       !readingData.hora ||
       !readingData.nombre_inspector ||
-      !readingData.lectura_x ||
-      !readingData.lectura_y
+      readingData.lectura_x === null || // Cambio de !readingData.lectura_x a comprobación de null/0
+      readingData.lectura_y === null
     ) {
       Alert.alert(
         "Validación",
@@ -271,7 +273,7 @@ export default function ReadingCreate() {
     };
 
     try {
-      // Usamos readingService en vez de api
+      // Importante: readingService.create DEBE ser asíncrono si usa SQLite, aunque aquí no está declarado como await
       readingService.create(readingPayload);
 
       Alert.alert("Éxito", `Lectura registrada para la grieta ${crackId}.`);
@@ -281,10 +283,14 @@ export default function ReadingCreate() {
         params: { projectId, crackId },
       });
     } catch (err) {
+      // *** DIAGNÓSTICO EN ESTA FUNCIÓN ***
+      const errorDetail = err instanceof Error ? err.message : String(err);
+
       console.error("Error al crear lectura:", err);
+
       Alert.alert(
-        "Error de Creación",
-        "Hubo un problema al guardar la lectura localmente."
+        "¡ERROR DE PERSISTENCIA!",
+        `La base de datos local falló al guardar. Por favor, reportar este error:\n\nDETALLE: ${errorDetail}`
       );
     } finally {
       setLoading(false);
