@@ -66,6 +66,13 @@ export const initDatabase = () => {
         lectura_y REAL,
         observaciones TEXT,
         foto TEXT,
+        nombre_inspector TEXT,
+        ambiente_temperatura_C REAL,
+        ambiente_hr_percent REAL,
+        ambiente_clima TEXT,
+        operacion_equipo_en_servicio INTEGER,
+        operacion_vibraciones INTEGER,
+        integridad TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (crack_id) REFERENCES cracks(id) ON DELETE CASCADE
       );
