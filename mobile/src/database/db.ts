@@ -82,6 +82,22 @@ export const initDatabase = () => {
       );
     `);
 
+    try {
+      db.execSync(`ALTER TABLE readings ADD COLUMN medida_a REAL;`);
+      console.log('Columna medida_a agregada a readings');
+    } catch (error) {
+      console.log(error);
+      // La columna ya existe, no hacer nada
+    }
+
+    try {
+      db.execSync(`ALTER TABLE readings ADD COLUMN medida_b REAL;`);
+      console.log('Columna medida_b agregada a readings');
+    } catch (error) {
+      console.log(error);
+      // La columna ya existe, no hacer nada
+    }
+
     console.log('Base de datos inicializada correctamente');
   } catch (error) {
     console.error('Error al inicializar la base de datos:', error);
