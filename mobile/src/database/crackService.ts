@@ -28,6 +28,8 @@ export interface CrackData {
     instrumentacion_eje_y: number | null;
     instrumentacion_lectura_cero: number | null;
     instrumentacion_adhesivo: string | null;
+    instrumentacion_medida_a: number | null;
+    instrumentacion_medida_b: number | null;
 
     instalacion_fecha: string | null;
     instalacion_hora: string | null;
@@ -73,7 +75,7 @@ export const crackService = {
         grieta_orientacion, grieta_longitud_visible_m, grieta_ancho_inicial_mm,
         grieta_clasificacion_preliminar, instrumentacion_modelo, instrumentacion_n_serie,
         instrumentacion_resolucion_mm, instrumentacion_eje_x, instrumentacion_eje_y,
-        instrumentacion_lectura_cero, instrumentacion_adhesivo, instalacion_fecha,
+        instrumentacion_lectura_cero, instrumentacion_adhesivo, instrumentacion_medida_a, instrumentacion_medida_b, instalacion_fecha,
         instalacion_hora, instalacion_instalador, instalacion_foto, instalacion_observaciones,
         umbral_verde_mm_sem, umbral_amarillo_mm_scm, umbral_rojo_mm_scm
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -103,6 +105,8 @@ export const crackService = {
       crackData.instrumentacion_eje_y,
       crackData.instrumentacion_lectura_cero,
       crackData.instrumentacion_adhesivo,
+      crackData.instrumentacion_medida_a,
+      crackData.instrumentacion_medida_b,
       crackData.instalacion_fecha,
       crackData.instalacion_hora,
       crackData.instalacion_instalador,
@@ -124,7 +128,8 @@ export const crackService = {
         instrumentacion_modelo = ?, instrumentacion_n_serie = ?,
         instrumentacion_resolucion_mm = ?, instrumentacion_eje_x = ?,
         instrumentacion_eje_y = ?, instrumentacion_lectura_cero = ?,
-        instrumentacion_adhesivo = ?, instalacion_fecha = ?, instalacion_hora = ?,
+        instrumentacion_adhesivo = ?, instrumentacion_medida_a = ?, instrumentacion_medida_b = ?,
+        instalacion_fecha = ?, instalacion_hora = ?,
         instalacion_instalador = ?, instalacion_foto = ?, instalacion_observaciones = ?,
         umbral_verde_mm_sem = ?, umbral_amarillo_mm_scm = ?, umbral_rojo_mm_scm = ?
       WHERE id = ?
@@ -152,6 +157,8 @@ export const crackService = {
       crackData.instrumentacion_eje_y,
       crackData.instrumentacion_lectura_cero,
       crackData.instrumentacion_adhesivo,
+      crackData.instrumentacion_medida_a,
+      crackData.instrumentacion_medida_b,
       crackData.instalacion_fecha,
       crackData.instalacion_hora,
       crackData.instalacion_instalador,

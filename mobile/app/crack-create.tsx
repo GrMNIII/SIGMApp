@@ -46,6 +46,8 @@ interface CrackData {
   instrumentacion_eje_y: number | null;
   instrumentacion_lectura_cero: number | null;
   instrumentacion_adhesivo: string | null;
+  instrumentacion_medida_a: number | null;
+  instrumentacion_medida_b: number | null;
 
   // Instalación (TEXT que pueden ser NULL)
   instalacion_fecha: string | null;
@@ -89,6 +91,8 @@ const initialNewCrackState: Omit<CrackData, "id" | "project_id"> = {
   instrumentacion_eje_y: null,
   instrumentacion_lectura_cero: null,
   instrumentacion_adhesivo: null,
+  instrumentacion_medida_a: null,
+  instrumentacion_medida_b: null,
   instalacion_fecha: null,
   instalacion_hora: null,
   instalacion_instalador: null,
@@ -296,6 +300,8 @@ export default function CrackCreate() {
         "instrumentacion_eje_x",
         "instrumentacion_eje_y",
         "instrumentacion_lectura_cero",
+        "instrumentacion_medida_a",
+        "instrumentacion_medida_b",
         "umbral_verde_mm_sem",
         "umbral_amarillo_mm_scm",
         "umbral_rojo_mm_scm",
@@ -672,6 +678,20 @@ export default function CrackCreate() {
             handleInputChange("instrumentacion_adhesivo", text)
           }
           placeholder="Ej: Epóxico / Mortero"
+        />
+        <FormInput
+          label="medida A"
+          value={newCrackData.instrumentacion_medida_a}
+          onChange={(text) => handleInputChange("instrumentacion_medida_a", text)}
+          keyboardType="numeric"
+          placeholder="Ej: 0.1 (en metros)"
+        />
+        <FormInput
+          label="medida B"
+          value={newCrackData.instrumentacion_medida_b}
+          onChange={(text) => handleInputChange("instrumentacion_medida_b", text)}
+          keyboardType="numeric"
+          placeholder="Ej: 0.1 (en metros)"
         />
 
         {/* SECCIÓN 5: INSTALACIÓN - Reemplazado por InstallationDateTimeSelector */}

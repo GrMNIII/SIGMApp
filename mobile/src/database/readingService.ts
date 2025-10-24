@@ -25,7 +25,7 @@ export const readingService = {
   create: (readingData: any) => {
     const result = db.runSync(
       `INSERT INTO readings (
-      crack_id, fecha, hora, lectura_x, lectura_y, observaciones, foto,
+      crack_id, fecha, hora, lectura_x, lectura_y, medida_a, medida_b, observaciones, foto,
       nombre_inspector, ambiente_temperatura_C, ambiente_hr_percent, ambiente_clima,
       operacion_equipo_en_servicio, operacion_vibraciones, integridad
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -35,6 +35,8 @@ export const readingService = {
         readingData.hora,
         readingData.lectura_x,
         readingData.lectura_y,
+        readingData.medida_a,
+        readingData.medida_b,
         readingData.observaciones,
         readingData.foto,
         readingData.nombre_inspector,
@@ -63,6 +65,8 @@ export const readingService = {
          nombre_inspector = ?,
          lectura_x = ?,
          lectura_y = ?,
+         medida_a = ?,
+         medida_b = ?,
          ambiente_temperatura_C = ?,
          ambiente_hr_percent = ?,
          ambiente_clima = ?,
@@ -78,6 +82,8 @@ export const readingService = {
         readingData.nombre_inspector,
         readingData.lectura_x,
         readingData.lectura_y,
+        readingData.medida_a,
+        readingData.medida_b,
         readingData.ambiente_temperatura_C,
         readingData.ambiente_hr_percent,
         readingData.ambiente_clima,

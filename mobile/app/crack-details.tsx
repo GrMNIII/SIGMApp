@@ -46,6 +46,8 @@ interface CrackData {
   instrumentacion_eje_y: number | null;
   instrumentacion_lectura_cero: number | null;
   instrumentacion_adhesivo: string | null;
+  instrumentacion_medida_a: number | null;
+  instrumentacion_medida_b: number | null;
 
   // Instalación (TEXT que pueden ser NULL)
   instalacion_fecha: string | null;
@@ -453,6 +455,25 @@ export default function CrackDetails() {
           handleUpdateField("umbral_verde_mm_sem", newValue)
         }
       />
+      <EditableField
+        label="Medida A"
+        value={crackData.instrumentacion_medida_a}
+        onSave={(newValue) =>
+          handleUpdateField("instrumentacion_medida_a", newValue)
+        }
+        keyboardType="decimal-pad"
+        isNumeric={true}
+      />
+      <EditableField
+        label="Medida B"
+        value={crackData.instrumentacion_medida_b}
+        onSave={(newValue) =>
+          handleUpdateField("instrumentacion_medida_b", newValue)
+        }
+        keyboardType="decimal-pad"
+        isNumeric={true}
+      />
+
 
       {/* BOTONES */}
       <View style={{ marginTop: 20, marginBottom: 10 }}>

@@ -23,6 +23,8 @@ interface ReadingData {
   nombre_inspector: string | null;
   lectura_x: number | null;
   lectura_y: number | null;
+  medida_a: number | null;
+  medida_b: number | null;
   ambiente_temperatura_C: number | null;
   ambiente_hr_percent: number | null;
   ambiente_clima: string | null;
@@ -113,6 +115,8 @@ const initialReadingState: Omit<ReadingData, "crack_id"> = {
   nombre_inspector: "",
   lectura_x: null,
   lectura_y: null,
+  medida_a: null,
+  medida_b: null,
   ambiente_temperatura_C: null,
   ambiente_hr_percent: null,
   ambiente_clima: null,
@@ -180,6 +184,8 @@ export default function ReadingCreate() {
       const isNumeric = [
         "lectura_x",
         "lectura_y",
+        "medida_a",
+        "medida_b",
         "ambiente_temperatura_C",
         "ambiente_hr_percent",
         "operacion_equipo_en_servicio",
@@ -263,12 +269,14 @@ export default function ReadingCreate() {
       !readingData.fecha ||
       !readingData.hora ||
       !readingData.nombre_inspector ||
-      readingData.lectura_x === null || // Cambio de !readingData.lectura_x a comprobación de null/0
-      readingData.lectura_y === null
+      readingData.lectura_x === null ||
+      readingData.lectura_y === null ||
+      readingData.medida_a === null ||
+      readingData.medida_b === null
     ) {
       Alert.alert(
         "Validación",
-        "Debes completar la Fecha, Hora, Inspector y las Lecturas X/Y."
+        "Debes completar la Fecha, Hora, Inspector, las Lecturas X/Y y las Medidas A/B."
       );
       return;
     }
@@ -396,6 +404,20 @@ export default function ReadingCreate() {
           label="Lectura Eje Y"
           value={readingData.lectura_y}
           onChange={(text) => handleInputChange("lectura_y", text)}
+          keyboardType="numeric"
+          required
+        />
+        <FormInput
+          label = "medida A"
+          value={readingData.medida_a}
+          onChange={(text) => handleInputChange("medida_a", text)}
+          keyboardType="numeric"
+          required
+        />
+        <FormInput
+          label = "medida B"
+          value={readingData.medida_b}
+          onChange={(text) => handleInputChange("medida_b", text)}
           keyboardType="numeric"
           required
         />

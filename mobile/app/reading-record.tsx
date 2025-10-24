@@ -24,6 +24,8 @@ interface Reading {
   nombre_inspector: string;
   lectura_x: number;
   lectura_y: number;
+  medida_a: number;
+  medida_b: number;
   ambiente_temperatura_C: number | null;
   ambiente_hr_percent: number | null;
   ambiente_clima: string | null; // TEXT
@@ -238,6 +240,75 @@ const ReadingCard = ({
                   },
                   "plain-text",
                   reading.lectura_y?.toString() || "",
+                  "decimal-pad"
+                );
+              }}
+            >
+              <Text style={editStyles.smallEditIcon}>✏️</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+
+      <View style={cardStyles.dataRow}>
+        <View style={cardStyles.dataItem}>
+          <Text style={cardStyles.label}>Medida A:</Text>
+          <View style={editStyles.inlineEditContainer}>
+            <Text style={cardStyles.valueA}>
+              {reading.medida_a !== null && reading.medida_a !== undefined
+                ? `${reading.medida_a.toFixed(2)} mm`
+                : "N/A"}
+            </Text>
+            <TouchableOpacity
+              style={editStyles.smallEditButton}
+              onPress={() => {
+                Alert.prompt(
+                  "Editar Medida A",
+                  "Ingrese el nuevo valor (mm):",
+                  async (text) => {
+                    if (text) {
+                      const normalizedText = text.replace(",", ".");
+                      const num = parseFloat(normalizedText);
+                      if (!isNaN(num)) {
+                        await handleUpdateField("medida_a", num);
+                      }
+                    }
+                  },
+                  "plain-text",
+                  reading.medida_a?.toString() || "",
+                  "decimal-pad"
+                );
+              }}
+            >
+              <Text style={editStyles.smallEditIcon}>✏️</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        <View style={cardStyles.dataItem}>
+          <Text style={cardStyles.label}>Medida B:</Text>
+          <View style={editStyles.inlineEditContainer}>
+            <Text style={cardStyles.valueB}>
+              {reading.medida_b !== null && reading.medida_b !== undefined
+                ? `${reading.medida_b.toFixed(2)} mm`
+                : "N/A"}
+            </Text>
+            <TouchableOpacity
+              style={editStyles.smallEditButton}
+              onPress={() => {
+                Alert.prompt(
+                  "Editar Medida B",
+                  "Ingrese el nuevo valor (mm):",
+                  async (text) => {
+                    if (text) {
+                      const normalizedText = text.replace(",", ".");
+                      const num = parseFloat(normalizedText);
+                      if (!isNaN(num)) {
+                        await handleUpdateField("medida_b", num);
+                      }
+                    }
+                  },
+                  "plain-text",
+                  reading.medida_b?.toString() || "",
                   "decimal-pad"
                 );
               }}
@@ -555,6 +626,16 @@ const cardStyles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "bold",
     color: "#007bff", // Azul para Y
+  },
+  valueA: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#28a745", // Verde para A
+  },
+  valueB: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#ffc107", // Amarillo/Naranja para B
   },
   detailsContainer: {
     marginBottom: 10,
