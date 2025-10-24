@@ -122,14 +122,13 @@ const initialReadingState: Omit<ReadingData, "crack_id"> = {
   observaciones: null,
 };
 
-// Componente auxiliar para manejar la entrada de texto/número (similar al de crack-create)
+// Componente auxiliar para manejar la entrada de texto/número
 interface FormInputProps {
   label: string;
   value: string | number | null;
   onChange: (text: string) => void;
   keyboardType?: "default" | "numeric" | "email-address" | "phone-pad";
   required?: boolean;
-  // FIX: Se agregó 'placeholder' a la interfaz
   placeholder?: string;
 }
 
@@ -150,7 +149,7 @@ const FormInput = ({
       style={formStyles.input}
       value={typeof value === "number" ? value.toString() : value || ""}
       onChangeText={onChange}
-      keyboardType={keyboardType}
+      keyboardType={keyboardType === "numeric" ? "decimal-pad" : keyboardType}
       // FIX: Se usa el placeholder provisto o se genera uno por defecto
       placeholder={placeholder || `Ingresar ${label.toLowerCase()}`}
     />
@@ -190,7 +189,6 @@ export default function ReadingCreate() {
       let newValue: string | number | null = text.trim() === "" ? null : text;
 
       if (isNumeric && newValue !== null) {
-        const num = parseFloat(newValue);
         // Si es un campo entero (como los flags de operación), usa parseInt
         if (
           key === "operacion_equipo_en_servicio" ||
@@ -199,7 +197,17 @@ export default function ReadingCreate() {
           newValue = parseInt(newValue.toString());
           if (isNaN(newValue)) newValue = 0; // Fallback seguro
         } else {
-          newValue = isNaN(num) ? text : num;
+          // Reemplazar coma por punto para el parseo
+          const normalizedText =
+            typeof newValue === "string"
+              ? newValue.replace(",", ".")
+              : newValue;
+          const num = parseFloat(normalizedText);
+          // Si el texto termina en punto o coma, mantener el string para permitir continuar escribiendo
+          const endsWithDecimalSeparator =
+            typeof text === "string" &&
+            (text.endsWith(".") || text.endsWith(","));
+          newValue = isNaN(num) || endsWithDecimalSeparator ? text : num;
         }
       }
 
@@ -324,7 +332,6 @@ export default function ReadingCreate() {
   }
 
   if (!crackExists) {
-    // Esto debería ser manejado por el if(error) anterior, pero es un fallback.
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.errorText}>

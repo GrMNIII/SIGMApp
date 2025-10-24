@@ -6,6 +6,8 @@ import {
   Alert,
   ActivityIndicator,
   FlatList,
+  TextInput,
+  TouchableOpacity,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import UIButton from "@/components/UIButton";
@@ -24,11 +26,9 @@ interface Reading {
   lectura_y: number;
   ambiente_temperatura_C: number | null;
   ambiente_hr_percent: number | null;
-  // Nuevos campos basados en el esquema SQL
   ambiente_clima: string | null; // TEXT
   operacion_equipo_en_servicio: number | null; // INTEGER (0 o 1)
   operacion_vibraciones: number | null; // INTEGER (0 o 1)
-  // Campos existentes
   integridad: string | null;
   observaciones: string | null;
 }
@@ -41,22 +41,134 @@ interface ReadingRecordParams {
 
 // --- COMPONENTES AUXILIARES ---
 
+// Componente para campos editables en lecturas
+interface EditableFieldProps {
+  label: string;
+  value: string | number | null;
+  onSave: (newValue: string | number | null) => Promise<void>;
+  keyboardType?: "default" | "decimal-pad";
+  isNumeric?: boolean;
+  compact?: boolean;
+}
+
+const EditableField = ({
+  label,
+  value,
+  onSave,
+  keyboardType = "default",
+  isNumeric = false,
+  compact = false,
+}: EditableFieldProps) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(value?.toString() || "");
+  const [loading, setLoading] = useState(false);
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      let finalValue: string | number | null =
+        editValue.trim() === "" ? null : editValue;
+
+      if (isNumeric && finalValue !== null) {
+        const normalizedText = finalValue.replace(",", ".");
+        const num = parseFloat(normalizedText);
+        finalValue = isNaN(num) ? null : num;
+      }
+
+      await onSave(finalValue);
+      setIsEditing(false);
+      Alert.alert("Éxito", "Campo actualizado correctamente");
+    } catch (error) {
+      Alert.alert("Error", "No se pudo guardar el cambio");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setEditValue(value?.toString() || "");
+    setIsEditing(false);
+  };
+
+  if (isEditing) {
+    return (
+      <View
+        style={
+          compact ? editStyles.compactEditContainer : editStyles.editContainer
+        }
+      >
+        {!compact && <Text style={cardStyles.label}>{label}:</Text>}
+        <View style={editStyles.editRow}>
+          <TextInput
+            style={editStyles.editInput}
+            value={editValue}
+            onChangeText={setEditValue}
+            keyboardType={keyboardType}
+            autoFocus
+          />
+          <TouchableOpacity
+            style={[editStyles.iconButton, editStyles.saveButton]}
+            onPress={handleSave}
+            disabled={loading}
+          >
+            <Text style={editStyles.buttonText}>✓</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[editStyles.iconButton, editStyles.cancelButton]}
+            onPress={handleCancel}
+            disabled={loading}
+          >
+            <Text style={editStyles.buttonText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View
+      style={
+        compact ? editStyles.compactViewContainer : editStyles.viewContainer
+      }
+    >
+      <Text style={cardStyles.detailText}>
+        <Text style={cardStyles.detailLabel}>{label}:</Text> {value ?? "N/A"}
+      </Text>
+      <TouchableOpacity
+        style={editStyles.editIconButton}
+        onPress={() => setIsEditing(true)}
+      >
+        <Text style={editStyles.editIcon}>✏️</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
 // Componente para mostrar una lectura individual
 const ReadingCard = ({
   reading,
   index,
+  onUpdate,
 }: {
   reading: Reading;
   index: number;
+  onUpdate: () => void;
 }) => {
-  // Función para formatear la fecha y hora en un solo objeto Date para ordenar
   const dateTime = `${reading.fecha}T${reading.hora}:00`;
 
-  // Ayudantes para mostrar Sí/No
-  const getServiceStatus = (val: number | null) =>
-    val === 1 ? "Sí" : val === 0 ? "No" : "N/A";
-  const getVibrationStatus = (val: number | null) =>
-    val === 1 ? "Presentes" : val === 0 ? "Ausentes" : "N/A";
+  const handleUpdateField = async (
+    fieldName: keyof Reading,
+    newValue: string | number | null
+  ) => {
+    try {
+      const updatedReading = { ...reading, [fieldName]: newValue };
+      await readingService.update(reading.id, updatedReading);
+      onUpdate(); // Recargar la lista
+    } catch (error) {
+      console.error("Error al actualizar campo:", error);
+      throw error;
+    }
+  };
 
   return (
     <View style={cardStyles.card}>
@@ -70,73 +182,127 @@ const ReadingCard = ({
       <View style={cardStyles.dataRow}>
         <View style={cardStyles.dataItem}>
           <Text style={cardStyles.label}>Eje X:</Text>
-          <Text style={cardStyles.valueX}>
-            {reading.lectura_x !== null
-              ? `${reading.lectura_x.toFixed(2)} mm`
-              : "N/A"}
-          </Text>
+          <View style={editStyles.inlineEditContainer}>
+            <Text style={cardStyles.valueX}>
+              {reading.lectura_x !== null
+                ? `${reading.lectura_x.toFixed(2)} mm`
+                : "N/A"}
+            </Text>
+            <TouchableOpacity
+              style={editStyles.smallEditButton}
+              onPress={() => {
+                Alert.prompt(
+                  "Editar Lectura X",
+                  "Ingrese el nuevo valor (mm):",
+                  async (text) => {
+                    if (text) {
+                      const normalizedText = text.replace(",", ".");
+                      const num = parseFloat(normalizedText);
+                      if (!isNaN(num)) {
+                        await handleUpdateField("lectura_x", num);
+                      }
+                    }
+                  },
+                  "plain-text",
+                  reading.lectura_x?.toString() || "",
+                  "decimal-pad"
+                );
+              }}
+            >
+              <Text style={editStyles.smallEditIcon}>✏️</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         <View style={cardStyles.dataItem}>
           <Text style={cardStyles.label}>Eje Y:</Text>
-          <Text style={cardStyles.valueY}>
-            {reading.lectura_y !== null
-              ? `${reading.lectura_y.toFixed(2)} mm`
-              : "N/A"}
-          </Text>
+          <View style={editStyles.inlineEditContainer}>
+            <Text style={cardStyles.valueY}>
+              {reading.lectura_y !== null
+                ? `${reading.lectura_y.toFixed(2)} mm`
+                : "N/A"}
+            </Text>
+            <TouchableOpacity
+              style={editStyles.smallEditButton}
+              onPress={() => {
+                Alert.prompt(
+                  "Editar Lectura Y",
+                  "Ingrese el nuevo valor (mm):",
+                  async (text) => {
+                    if (text) {
+                      const normalizedText = text.replace(",", ".");
+                      const num = parseFloat(normalizedText);
+                      if (!isNaN(num)) {
+                        await handleUpdateField("lectura_y", num);
+                      }
+                    }
+                  },
+                  "plain-text",
+                  reading.lectura_y?.toString() || "",
+                  "decimal-pad"
+                );
+              }}
+            >
+              <Text style={editStyles.smallEditIcon}>✏️</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
       {/* Bloque de Condiciones Ambientales */}
       <View style={cardStyles.detailsBlock}>
         <Text style={cardStyles.blockTitle}>Condiciones Ambientales</Text>
-        <Text style={cardStyles.detailText}>
-          <Text style={cardStyles.detailLabel}>Temperatura:</Text>
-          {reading.ambiente_temperatura_C !== null
-            ? `${reading.ambiente_temperatura_C}°C`
-            : "N/A"}
-        </Text>
-        <Text style={cardStyles.detailText}>
-          <Text style={cardStyles.detailLabel}>Humedad Relativa:</Text>
-          {reading.ambiente_hr_percent !== null
-            ? `${reading.ambiente_hr_percent}%`
-            : "N/A"}
-        </Text>
-        <Text style={cardStyles.detailText}>
-          <Text style={cardStyles.detailLabel}>Clima:</Text>
-          {reading.ambiente_clima || "No reportado"}
-        </Text>
+        <EditableField
+          label="Temperatura"
+          value={reading.ambiente_temperatura_C}
+          onSave={(val) => handleUpdateField("ambiente_temperatura_C", val)}
+          keyboardType="decimal-pad"
+          isNumeric={true}
+          compact={true}
+        />
+        <EditableField
+          label="Humedad Relativa"
+          value={reading.ambiente_hr_percent}
+          onSave={(val) => handleUpdateField("ambiente_hr_percent", val)}
+          keyboardType="decimal-pad"
+          isNumeric={true}
+          compact={true}
+        />
+        <EditableField
+          label="Clima"
+          value={reading.ambiente_clima}
+          onSave={(val) => handleUpdateField("ambiente_clima", val)}
+          compact={true}
+        />
       </View>
 
       {/* Bloque de Operación y Sensor */}
       <View style={cardStyles.detailsBlock}>
         <Text style={cardStyles.blockTitle}>Condiciones Operacionales</Text>
-        <Text style={cardStyles.detailText}>
-          <Text style={cardStyles.detailLabel}>Equipo en Servicio:</Text>
-          {getServiceStatus(reading.operacion_equipo_en_servicio)}
-        </Text>
-        <Text style={cardStyles.detailText}>
-          <Text style={cardStyles.detailLabel}>Vibraciones:</Text>
-          {getVibrationStatus(reading.operacion_vibraciones)}
-        </Text>
-        <Text style={cardStyles.detailText}>
-          <Text style={cardStyles.detailLabel}>Integridad Sensor:</Text>{" "}
-          {reading.integridad || "No reportada"}
-        </Text>
+        <EditableField
+          label="Integridad Sensor"
+          value={reading.integridad}
+          onSave={(val) => handleUpdateField("integridad", val)}
+          compact={true}
+        />
       </View>
 
       <View style={cardStyles.detailsContainer}>
-        <Text style={cardStyles.detailText}>
-          <Text style={cardStyles.detailLabel}>Inspector:</Text>{" "}
-          {reading.nombre_inspector || "Desconocido"}
-        </Text>
+        <EditableField
+          label="Inspector"
+          value={reading.nombre_inspector}
+          onSave={(val) => handleUpdateField("nombre_inspector", val)}
+          compact={true}
+        />
       </View>
 
-      {reading.observaciones && (
-        <View style={cardStyles.notesContainer}>
-          <Text style={cardStyles.notesTitle}>Observaciones:</Text>
-          <Text style={cardStyles.notesText}>{reading.observaciones}</Text>
-        </View>
-      )}
+      <View style={cardStyles.detailsContainer}>
+        <EditableField
+          label="Observaciones"
+          value={reading.observaciones}
+          onSave={(val) => handleUpdateField("observaciones", val)}
+          compact={true}
+        />
+      </View>
     </View>
   );
 };
@@ -191,8 +357,8 @@ export default function ReadingRecord() {
     return [...readings].sort((a, b) => {
       const dateA = new Date(`${a.fecha}T${a.hora || "00:00"}`);
       const dateB = new Date(`${b.fecha}T${b.hora || "00:00"}`);
-      // Orden descendente (más nuevo primero)
-      return dateB.getTime() - dateA.getTime();
+      // Orden ascendente (más antiguo primero, más reciente al final)
+      return dateA.getTime() - dateB.getTime();
     });
   }, [readings]);
 
@@ -257,7 +423,11 @@ export default function ReadingRecord() {
           data={sortedReadings}
           keyExtractor={(item) => item.id.toString()}
           renderItem={({ item, index }: { item: Reading; index: number }) => (
-            <ReadingCard reading={item} index={index} />
+            <ReadingCard
+              reading={item}
+              index={index}
+              onUpdate={fetchReadings}
+            />
           )}
         />
       )}
@@ -430,5 +600,75 @@ const cardStyles = StyleSheet.create({
     fontSize: 14,
     fontStyle: "italic",
     color: "#6c757d",
+  },
+});
+const editStyles = StyleSheet.create({
+  editContainer: {
+    marginBottom: 10,
+  },
+  compactEditContainer: {
+    marginBottom: 5,
+  },
+  viewContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 5,
+  },
+  compactViewContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  editRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  editInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#007bff",
+    backgroundColor: "#fff",
+    borderRadius: 6,
+    padding: 8,
+    fontSize: 14,
+    marginRight: 6,
+  },
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 4,
+  },
+  saveButton: {
+    backgroundColor: "#28a745",
+  },
+  cancelButton: {
+    backgroundColor: "#dc3545",
+  },
+  buttonText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  editIconButton: {
+    padding: 4,
+  },
+  editIcon: {
+    fontSize: 16,
+  },
+  inlineEditContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  smallEditButton: {
+    marginLeft: 8,
+    padding: 4,
+  },
+  smallEditIcon: {
+    fontSize: 16,
   },
 });

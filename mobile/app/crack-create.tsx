@@ -128,7 +128,7 @@ const FormInput = ({
       style={formStyles.input}
       value={typeof value === "number" ? value.toString() : value || ""}
       onChangeText={onChange}
-      keyboardType={keyboardType}
+      keyboardType={keyboardType === "numeric" ? "decimal-pad" : keyboardType}
       placeholder={placeholder}
     />
   </View>
@@ -304,9 +304,15 @@ export default function CrackCreate() {
       let newValue: string | number | null = text.trim() === "" ? null : text;
 
       if (isNumeric && newValue !== null) {
-        // Intenta parsear a número, si falla, mantén el string para que el usuario pueda corregir
-        const num = parseFloat(newValue);
-        newValue = isNaN(num) ? text : num;
+        // Reemplazar coma por punto para el parseo
+        const normalizedText =
+          typeof newValue === "string" ? newValue.replace(",", ".") : newValue;
+        const num = parseFloat(normalizedText);
+        // Si el texto termina en punto o coma, mantener el string para permitir continuar escribiendo
+        const endsWithDecimalSeparator =
+          typeof text === "string" &&
+          (text.endsWith(".") || text.endsWith(","));
+        newValue = isNaN(num) || endsWithDecimalSeparator ? text : num;
       }
 
       return { ...prev, [key]: newValue };

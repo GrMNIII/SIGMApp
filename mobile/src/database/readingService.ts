@@ -53,4 +53,42 @@ export const readingService = {
   delete: (id: number) => {
     db.runSync("DELETE FROM readings WHERE id = ?", [id]);
   },
+  // Actualizar un registro
+  update: (id: number, readingData: any) => {
+    db.runSync(
+      `UPDATE readings 
+       SET 
+         fecha = ?,
+         hora = ?,
+         nombre_inspector = ?,
+         lectura_x = ?,
+         lectura_y = ?,
+         ambiente_temperatura_C = ?,
+         ambiente_hr_percent = ?,
+         ambiente_clima = ?,
+         operacion_equipo_en_servicio = ?,
+         operacion_vibraciones = ?,
+         integridad = ?,
+         observaciones = ?,
+         foto = ?
+       WHERE id = ?`,
+      [
+        readingData.fecha,
+        readingData.hora,
+        readingData.nombre_inspector,
+        readingData.lectura_x,
+        readingData.lectura_y,
+        readingData.ambiente_temperatura_C,
+        readingData.ambiente_hr_percent,
+        readingData.ambiente_clima,
+        readingData.operacion_equipo_en_servicio,
+        readingData.operacion_vibraciones,
+        readingData.integridad,
+        readingData.observaciones,
+        readingData.foto,
+        id,
+      ]
+    );
+  },
+  
 };
